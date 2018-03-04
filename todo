@@ -1,0 +1,181 @@
+<todo>
+- filter out small box in gt_boxes for rpn_target()
+- filter boundary box (bases) for rpn_target()
+
+- check if rpn regression target needs std divide
+
+
+
+
+
+
+
+
+## format
+label: int32
+mask,prob: float32
+
+
+
+delta  : float32
+
+
+thresh:  bool
+contour: bool
+center : bool
+
+
+
+
+
+
+http://www.allencell.org/cell-image-gallery.html
+
+
+tricks:
+ -- full resolution is much more accurate that resized version
+    (but need to take care of stage-2 competition)
+
+
+https://stackoverflow.com/questions/12771846/python-separate-round-particles-by-offsetting-contours-shrinking-polygones
+
+
+verify 1-index
+
+http://pythonvision.org/basic-tutorial/
+http://www.imaging.irb.usi.ch/how-count-cell-nuclei-fluorescence-image-0
+
+nuclei fluorescence image dataset
+https://data.broadinstitute.org/bbbc/image_sets.html
+http://biii.upf.edu/sample-data
+https://imagej.nih.gov/ij/plugins/ihc-toolbox/index.html
+
+https://nucleisegmentationbenchmark.weebly.com/
+http://bioimage.ucsb.edu/research/bio-segmentation
+https://surabhibhargava.github.io/Detection-and-Segmentation-of-Nuclei-in-Computational-Pathology/
+
+
+
+Detection and Segmentation of nuclei in Computational Pathology
+histology
+cell microsopy
+fluroclense
+https://www.na-mic.org/wiki/ITK_GPAC_level_set
+http://www.ee.columbia.edu/ln/dvmm/researchProjects/MAS/miais.htm
+
+https://cs.adelaide.edu.au/~carneiro/isbi14_challenge/dataset.html
+augument long boundary
+https://basicmedicalkey.com/glandular-neoplasms-of-the-cervix/
+
+
+augment:
+- focal, bur
+- motion, blur
+- noise
+- size
+- uneven illumintaion background
+- bright spot (high constrast)
+- low light
+- size, rotate, distort
+
+-cut away occlusion
+- overlay occlusion
+- 2 cell overlay
+
+- long verus circle
+https://www.youtube.com/watch?v=Dbiq6l50zO8
+
+https://www.google.com.sg/search?biw=1425&bih=721&tbm=isch&sa=1&ei=rl9jWs2qC8vMvgSm2bKYCA&q=nuclei+++Anne+Carpenter++broad+institute&oq=nuclei+++Anne+Carpenter++broad+institute&gs_l=psy-ab.3...27285.28841.0.29147.2.2.0.0.0.0.51.96.2.2.0....0...1c.1.64.psy-ab..0.0.0....0.YR53geMLB6Y#imgrc=zXGQYn-1QDhjnM:
+https://www.broadinstitute.org/blog/cellprofiler-goes-3d
+
+https://www.wired.com/2017/04/massive-3-d-cell-library-teaches-computers-find-mitochondria/
+
+https://data.broadinstitute.org/bbbc/BBBC006/
+https://www.pathologystudent.com/
+
+ macrophage with podosomes
+
+tissue
+https://www.google.com.sg/search?hl=en-SG&tbs=simg:CAESlwEJ3EmUOAtGZvoaiwELEKjU2AQaBAgVCAoMCxCwjKcIGmIKYAgDEij-E_1QDvwm5Cd4JrxT_1CesDlxSkAuAhoTeFI-Ao3ynOIbgngzWGJ6I3GjCsnVnAlHYmTzY-H3NVAXNcwRWSNTDvfOKjwW699_1XowADThhpqosNMOqaCI_1LdOUogBAwLEI6u_1ggaCgoICAESBKAEuKoM&q=tissue&tbm=isch&sa=X&ved=0ahUKEwiFtPzW7ubYAhUY148KHaLhAS0Qsw4IMw&biw=1425&bih=721#imgrc=5bp38t2shvzIGM:
+
+http://www.sarcomaimages.com/index.php?v=Leiomyosarcoma-of-Soft-Tissue
+https://pixnio.com/science/microscopy-images/amebiasis-entamoeba-histolytica/brain-tissue-within-which-was-a-centrally-located-acanthamoeba-sp-cyst-acanthamoeba-spp
+https://pixnio.com/tag/tissue
+
+ffmpeg -f image2  -pattern_type glob -r 33 -i "results/*.png" -c:v libx264  results.mp4
+
+
+https://vizbi.org/2010/presentations/anne_carpenter.pdf
+https://www.biotechniques.com/BiotechniquesJournal/2016/March/MAKING-SENSE-OF-BIG-DATA/biotechniques-363511.html?service=print
+http://www.ittc.ku.edu/workshops/presentations/2010_09_Carpenter.pdf
+
+
+https://www.biorxiv.org/content/biorxiv/early/2016/11/02/085118.full.pdf
+https://github.com/sanuj/nuclei-net
+
+https://www.youtube.com/watch?v=4FhdkiZ51Js
+
+
+
+
+https://www.kaggle.com/kmader/normalizing-brightfield-stained-and-fluorescence
+
+
+
+https://www.kaggle.com/nhargan/defining-microscopy-type
+# 0 - staining;
+# 1 - fluorescent microscopy;
+# 2 - brightfield microscopy;
+
+https://www.kaggle.com/etheleon/exploratory-analysis-image-stats
+Brightfield microscopy image
+
+---------------------------------
+https://www.kaggle.com/ramzes2/distribution-of-nuclei-sizes
+
+
+https://www.kaggle.com/ramzes2/exploring-the-images-and-their-nuclei-mask-contous
+https://micro-dimensions.com/blog/2017/10/11/the-drive-to-share-discuss-and-mingle-understanding-the-social-network-pathologist
+
+
+-------
+https://academic.oup.com/endo/article/141/4/1384/2988007
+http://jpet.aspetjournals.org/content/304/3/1103
+
+https://www.proteinatlas.org/
+http://www.nordiqc.org/news.php#news_18
+
+
+
+
+
+
+
+
+
+-------------------------------------------
+Thanks!
+
+Currently, I am using pytorch framework.
+
+1. construct 256x256 input unet with 128x128 output. For each pixel output, i estimate if it is nuclei center or not and the estimated nuclei radius.
+
+2. based on estimated nuclei radius, i can resize the whole image to a "standard size".
+
+3.  Then i have another fully convolution network read the  "standard size" image and predict if each pixel in the  32x32 region centering a  "nuclei center" is part of the nuclei or not (aka. instance segmentation here). I want to avoid the cropping by using a output channels of 32x32=1024.
+
+
+
+Cytology
+https://archive.cnx.org/contents/d418b229-8a72-47e4-b4c5-741556d7a3cc@5/animal-tissue-types
+
+
+
+    # one hot encode
+    target_weights = Variable(torch.zeros((batch_size,num_classes))).cuda()
+    target_weights.scatter_(1, labels.view(-1,1), 1)
+    target_weights[:,0] = 0
+    target_weights = target_weights.view(batch_size,2,1).expand((batch_size,num_classes,4)).contiguous()
+    rcnn_reg_loss = weighted_smooth_l1( deltas, targets, target_weights, deltas_sigma)
+
+    return rcnn_cls_loss, rcnn_reg_loss
