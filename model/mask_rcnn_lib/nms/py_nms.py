@@ -1,5 +1,6 @@
 import numpy as np
 
+
 # deafult nms in python for checking
 def py_nms(dets, thresh):
     x0 = dets[:, 0]
@@ -25,7 +26,7 @@ def py_nms(dets, thresh):
         intersect = w * h
         overlap = intersect / (areas[i] + areas[order[1:]] - intersect)
 
-        inds  = np.where(overlap <= thresh)[0]
+        inds = np.where(overlap <= thresh)[0]
         order = order[inds + 1]
 
     return keep

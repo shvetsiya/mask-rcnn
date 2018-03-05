@@ -3,6 +3,7 @@ from common import *
 from model.mask_rcnn_lib.box import *
 from model.mask_rcnn_lib.draw import *
 
+
 #
 #
 # def draw_rcnn_pre_nms(image, probs, deltas, proposals, cfg, colors, names, threshold=-1, is_before=1, is_after=1):
@@ -49,62 +50,68 @@ from model.mask_rcnn_lib.draw import *
 # #---------------------------------------------------------------------------
 #
 #this is in cpu: <todo> change to gpu ?
-def rcnn_nms(cfg, mode, inputs, proposals, probs, deltas ):
+def rcnn_nms(cfg, mode, inputs, proposals, probs, deltas):
 
-    if mode in ['train',]:
-        nms_pre_threshold          = cfg.rcnn_train_nms_pre_threshold
+    if mode in [
+            'train',
+    ]:
+        nms_pre_threshold = cfg.rcnn_train_nms_pre_threshold
         nms_post_overlap_threshold = cfg.rcnn_train_nms_post_overlap_threshold
-        nms_max_per_image          = cfg.rcnn_train_nms_max_per_image
+        nms_max_per_image = cfg.rcnn_train_nms_max_per_image
 
-    elif mode in ['valid', 'test',]:
-        nms_pre_threshold          = cfg.rcnn_test_nms_pre_threshold
+    elif mode in [
+            'valid',
+            'test',
+    ]:
+        nms_pre_threshold = cfg.rcnn_test_nms_pre_threshold
         nms_post_overlap_threshold = cfg.rcnn_test_nms_post_overlap_threshold
-        nms_max_per_image          = cfg.rcnn_test_nms_max_per_image
+        nms_max_per_image = cfg.rcnn_test_nms_max_per_image
 
     elif mode in ['eval']:
-        nms_pre_threshold = 0.05 ##0.05   # set low numbe r to make roc curve.
-                                          # else set high number for faster speed at inference
+        nms_pre_threshold = 0.05  ##0.05   # set low numbe r to make roc curve.
+        # else set high number for faster speed at inference
         nms_post_overlap_threshold = cfg.rcnn_test_nms_post_overlap_threshold
-        nms_max_per_image          = cfg.rcnn_test_nms_max_per_image
+        nms_max_per_image = cfg.rcnn_test_nms_max_per_image
 
     else:
-        raise ValueError('rcnn_nms(): invalid mode = %s?'%mode)
-
+        raise ValueError('rcnn_nms(): invalid mode = %s?' % mode)
 
     batch_size = len(inputs)
-    height, width = (inputs.size(2),inputs.size(3))  #original image width
+    height, width = (inputs.size(2), inputs.size(3))  #original image width
     num_classes = cfg.num_classes
 
-    probs  = probs.cpu().data.numpy()
-    deltas = deltas.cpu().data.numpy().reshape(-1, num_classes,4)
+    probs = probs.cpu().data.numpy()
+    deltas = deltas.cpu().data.numpy().reshape(-1, num_classes, 4)
     proposals = proposals.cpu().data.numpy()
 
     #non-max suppression
     detections = []
     for b in range(batch_size):
-        detection = [np.empty((0,7),np.float32),]
+        detection = [
+            np.empty((0, 7), np.float32),
+        ]
 
-        idx = np.where(proposals[:,0]==b)[0]
-        if len(idx)>0:
-            ps = probs [idx]
+        idx = np.where(proposals[:, 0] == b)[0]
+        if len(idx) > 0:
+            ps = probs[idx]
             ds = deltas[idx]
             proposal = proposals[idx]
 
-            for j in range(1,num_classes): #skip background
-                idx = np.where(ps[:,j] > nms_pre_threshold)[0]
-                if len(idx)>0:
-                    p = ps[idx, j].reshape(-1,1)
+            for j in range(1, num_classes):  #skip background
+                idx = np.where(ps[:, j] > nms_pre_threshold)[0]
+                if len(idx) > 0:
+                    p = ps[idx, j].reshape(-1, 1)
                     d = ds[idx, j]
-                    box = box_transform_inv(proposal[idx,1:5], d)
+                    box = box_transform_inv(proposal[idx, 1:5], d)
                     box = clip_boxes(box, width, height)
                     keep = gpu_nms(np.hstack((box, p)), nms_post_overlap_threshold)
 
                     num = len(keep)
-                    det = np.zeros((num,7),np.float32)
-                    det[:,0  ] = b
-                    det[:,1:5] = box[keep]
-                    det[:,5  ] = p[keep,0]
-                    det[:,6  ] = j
+                    det = np.zeros((num, 7), np.float32)
+                    det[:, 0] = b
+                    det[:, 1:5] = box[keep]
+                    det[:, 5] = p[keep, 0]
+                    det[:, 6] = j
                     detection.append(det)
 
         detection = np.vstack(detection)
@@ -112,8 +119,8 @@ def rcnn_nms(cfg, mode, inputs, proposals, probs, deltas ):
         ##limit to MAX_PER_IMAGE detections over all classes
         if nms_max_per_image > 0:
             if len(detection) > nms_max_per_image:
-                threshold = np.sort(detection[:,4])[-nms_max_per_image]
-                keep = np.where(detection[:,4] >= threshold)[0]
+                threshold = np.sort(detection[:, 4])[-nms_max_per_image]
+                keep = np.where(detection[:, 4] >= threshold)[0]
                 detection = detection[keep, :]
 
         detections.append(detection)
@@ -121,13 +128,6 @@ def rcnn_nms(cfg, mode, inputs, proposals, probs, deltas ):
     return detections
 
 
-
-
-#-----------------------------------------------------------------------------  
+#-----------------------------------------------------------------------------
 if __name__ == '__main__':
-    print( '%s: calling main function ... ' % os.path.basename(__file__))
-
-
-
- 
- 
+    print('%s: calling main function ... ' % os.path.basename(__file__))
