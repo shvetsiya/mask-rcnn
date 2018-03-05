@@ -10,36 +10,35 @@ from model.mask_rcnn_lib.nms.gpu_nms import gpu_nms
 
 from model.mask_rcnn_lib.overlap.cython_box_overlap import cython_box_overlap
 
+
 ## torch ##############################################################################
 # Clip process to image boundaries.
 def torch_clip_boxes(boxes, width, height):
     boxes = torch.stack(
-        (boxes[:,0].clamp(0, width  - 1),
-         boxes[:,1].clamp(0, height - 1),
-         boxes[:,2].clamp(0, width  - 1),
-         boxes[:,3].clamp(0, height - 1)), 1)
+        (boxes[:, 0].clamp(0, width - 1), boxes[:, 1].clamp(0, height - 1), boxes[:, 2].clamp(
+            0, width - 1), boxes[:, 3].clamp(0, height - 1)), 1)
 
     return boxes
 
 
 def torch_box_transform(boxes, targets):
-  bw = boxes[:, 2] - boxes[:, 0] + 1.0
-  bh = boxes[:, 3] - boxes[:, 1] + 1.0
-  bx = boxes[:, 0] + 0.5 * bw
-  by = boxes[:, 1] + 0.5 * bh
+    bw = boxes[:, 2] - boxes[:, 0] + 1.0
+    bh = boxes[:, 3] - boxes[:, 1] + 1.0
+    bx = boxes[:, 0] + 0.5 * bw
+    by = boxes[:, 1] + 0.5 * bh
 
-  tw = targets[:, 2] - targets[:, 0] + 1.0
-  th = targets[:, 3] - targets[:, 1] + 1.0
-  tx = targets[:, 0] + 0.5 * tw
-  ty = targets[:, 1] + 0.5 * th
+    tw = targets[:, 2] - targets[:, 0] + 1.0
+    th = targets[:, 3] - targets[:, 1] + 1.0
+    tx = targets[:, 0] + 0.5 * tw
+    ty = targets[:, 1] + 0.5 * th
 
-  dx = (tx - bx) / bw
-  dy = (ty - by) / bh
-  dw = torch.log(tw / bw)
-  dh = torch.log(th / bh)
+    dx = (tx - bx) / bw
+    dy = (ty - by) / bh
+    dw = torch.log(tw / bw)
+    dh = torch.log(th / bh)
 
-  deltas = torch.stack((dx, dy, dw, dh), 1)
-  return deltas
+    deltas = torch.stack((dx, dy, dw, dh), 1)
+    return deltas
 
 
 def torch_box_transform_inv(boxes, deltas):
@@ -63,17 +62,9 @@ def torch_box_transform_inv(boxes, deltas):
     w = torch.exp(dw) * bw
     h = torch.exp(dh) * bh
 
-    predictions = torch.cat( (
-        x - 0.5 * w,
-        y - 0.5 * h,
-        x + 0.5 * w,
-        y + 0.5 * h), 1)
+    predictions = torch.cat((x - 0.5 * w, y - 0.5 * h, x + 0.5 * w, y + 0.5 * h), 1)
 
     return predictions
-
-
-
-
 
 
 # #------------------------------------------------------------------------------
@@ -119,8 +110,8 @@ def torch_box_transform_inv(boxes, deltas):
 #
 #
 
-def torch_box_overlap(boxes, gt_boxes):
 
+def torch_box_overlap(boxes, gt_boxes):
     '''
     Parameters
     ----------
@@ -131,29 +122,32 @@ def torch_box_overlap(boxes, gt_boxes):
     overlaps: (N, K) overlap between boxes and gt_boxes
     '''
 
-    box_areas = (boxes   [:, 2] - boxes   [:, 0] + 1) *  (boxes   [:, 3] - boxes   [:, 1] + 1)
-    gt_areas  = (gt_boxes[:, 2] - gt_boxes[:, 0] + 1) *  (gt_boxes[:, 3] - gt_boxes[:, 1] + 1)
+    box_areas = (boxes[:, 2] - boxes[:, 0] + 1) * (boxes[:, 3] - boxes[:, 1] + 1)
+    gt_areas = (gt_boxes[:, 2] - gt_boxes[:, 0] + 1) * (gt_boxes[:, 3] - gt_boxes[:, 1] + 1)
 
-    intersect_ws = (torch.min(boxes[:, 2:3], gt_boxes[:, 2:3].t()) - torch.max(boxes[:, 0:1], gt_boxes[:, 0:1].t()) + 1).clamp(min=0)
-    intersect_hs = (torch.min(boxes[:, 3:4], gt_boxes[:, 3:4].t()) - torch.max(boxes[:, 1:2], gt_boxes[:, 1:2].t()) + 1).clamp(min=0)
+    intersect_ws = (torch.min(boxes[:, 2:3], gt_boxes[:, 2:3].t()) -
+                    torch.max(boxes[:, 0:1], gt_boxes[:, 0:1].t()) + 1).clamp(min=0)
+    intersect_hs = (torch.min(boxes[:, 3:4], gt_boxes[:, 3:4].t()) -
+                    torch.max(boxes[:, 1:2], gt_boxes[:, 1:2].t()) + 1).clamp(min=0)
     intersect_areas = intersect_ws * intersect_hs
-    union_areas     = box_areas.view(-1, 1) + gt_areas.view(1, -1) - intersect_areas
-    overlaps        = intersect_areas / union_areas
+    union_areas = box_areas.view(-1, 1) + gt_areas.view(1, -1) - intersect_areas
+    overlaps = intersect_areas / union_areas
 
     return overlaps
 
+
 def box_overlap(boxes, gt_boxes):
 
+    box_areas = (boxes[:, 2] - boxes[:, 0] + 1) * (boxes[:, 3] - boxes[:, 1] + 1)
+    gt_areas = (gt_boxes[:, 2] - gt_boxes[:, 0] + 1) * (gt_boxes[:, 3] - gt_boxes[:, 1] + 1)
 
-
-    box_areas = (boxes   [:, 2] - boxes   [:, 0] + 1) *  (boxes   [:, 3] - boxes   [:, 1] + 1)
-    gt_areas  = (gt_boxes[:, 2] - gt_boxes[:, 0] + 1) *  (gt_boxes[:, 3] - gt_boxes[:, 1] + 1)
-
-    intersect_ws = np.clip((np.min(boxes[:, 2:3], gt_boxes[:, 2:3].t()) - np.max(boxes[:, 0:1], gt_boxes[:, 0:1].t()) + 1),0,1e8)
-    intersect_hs = np.clip((np.min(boxes[:, 3:4], gt_boxes[:, 3:4].t()) - np.max(boxes[:, 1:2], gt_boxes[:, 1:2].t()) + 1),0,1e8)
+    intersect_ws = np.clip((np.min(boxes[:, 2:3], gt_boxes[:, 2:3].t()) -
+                            np.max(boxes[:, 0:1], gt_boxes[:, 0:1].t()) + 1), 0, 1e8)
+    intersect_hs = np.clip((np.min(boxes[:, 3:4], gt_boxes[:, 3:4].t()) -
+                            np.max(boxes[:, 1:2], gt_boxes[:, 1:2].t()) + 1), 0, 1e8)
     intersect_areas = intersect_ws * intersect_hs
-    union_areas     = box_areas.view(-1, 1) + gt_areas.view(1, -1) - intersect_areas
-    overlaps        = intersect_areas / union_areas
+    union_areas = box_areas.view(-1, 1) + gt_areas.view(1, -1) - intersect_areas
+    overlaps = intersect_areas / union_areas
 
     return overlaps
 
@@ -176,12 +170,11 @@ def box_overlap(boxes, gt_boxes):
 # #------------------------------------------------------------------------------
 
 
-
 ## python  ##############################################################################
 def clip_boxes(boxes, width, height):
-    boxes[:, 0] = np.clip(boxes[:, 0], 0, width  - 1)
+    boxes[:, 0] = np.clip(boxes[:, 0], 0, width - 1)
     boxes[:, 1] = np.clip(boxes[:, 1], 0, height - 1)
-    boxes[:, 2] = np.clip(boxes[:, 2], 0, width  - 1)
+    boxes[:, 2] = np.clip(boxes[:, 2], 0, width - 1)
     boxes[:, 3] = np.clip(boxes[:, 3], 0, height - 1)
     return boxes
 
@@ -191,8 +184,8 @@ def box_transform(windows, targets):
 
     bw = windows[:, 2] - windows[:, 0] + 1.0
     bh = windows[:, 3] - windows[:, 1] + 1.0
-    bx = windows[:, 0] + 0.5 *bw
-    by = windows[:, 1] + 0.5 *bh
+    bx = windows[:, 0] + 0.5 * bw
+    by = windows[:, 1] + 0.5 * bh
 
     tw = targets[:, 2] - targets[:, 0] + 1.0
     th = targets[:, 3] - targets[:, 1] + 1.0
@@ -210,8 +203,8 @@ def box_transform(windows, targets):
 
 def box_transform_inv(boxes, deltas):
 
-    num   = len(boxes)
-    predictions = np.zeros((num,4), dtype=np.float32)
+    num = len(boxes)
+    predictions = np.zeros((num, 4), dtype=np.float32)
     # if num == 0: return predictions  #not possible?
 
     b_w = boxes[:, 2] - boxes[:, 0] + 1.0
@@ -239,6 +232,8 @@ def box_transform_inv(boxes, deltas):
     predictions[:, 3::4] = y + 0.5 * h
 
     return predictions
+
+
 #
 # def torch_box_transform(boxes, targets):
 #   bw = boxes[:, 2] - boxes[:, 0] + 1.0

@@ -5,29 +5,33 @@ from model.mask_rcnn_lib.box import *
 from model.mask_rcnn_lib.draw import *
 
 
-
 #------------------------------------------------------------------------------
 # make windows
 def make_bases(base_size, base_apsect_ratios):
     bases = []
     for ratio in base_apsect_ratios:
-        w = base_size/math.sqrt(ratio)
+        w = base_size / math.sqrt(ratio)
         h = base_size
-        base =(-w//2, -h//2, w//2, h//2, )
+        base = (
+            -w // 2,
+            -h // 2,
+            w // 2,
+            h // 2,
+        )
         bases.append(base)
 
-    bases = np.array(bases,np.float32)
+    bases = np.array(bases, np.float32)
     return bases
 
 
 def make_windows(p, stride, bases):
-    windows=[]
+    windows = []
     _, _, H, W = p.size()
-    for y, x in itertools.product(range(H),range(W)):
-        cx = x*stride
-        cy = y*stride
+    for y, x in itertools.product(range(H), range(W)):
+        cx = x * stride
+        cy = y * stride
         for b in bases:
-            windows.append(b + np.array([cx,cy,cx,cy],np.float32))
+            windows.append(b + np.array([cx, cy, cx, cy], np.float32))
 
     windows = np.array(windows)
     return windows
@@ -38,14 +42,15 @@ def make_rpn_windows(cfg, ps):
     rpn_bases = []
     rpn_windows = []
     for i in range(cfg.rpn_num_heads):
-        bases   = make_bases(cfg.rpn_base_sizes[i], cfg.rpn_base_apsect_ratios)
+        bases = make_bases(cfg.rpn_base_sizes[i], cfg.rpn_base_apsect_ratios)
         windows = make_windows(ps[i], cfg.rpn_strides[i], bases)
         rpn_bases.append(bases)
         rpn_windows.append(windows)
 
-    rpn_bases   = np.vstack(rpn_bases)
+    rpn_bases = np.vstack(rpn_bases)
     rpn_windows = np.vstack(rpn_windows)
     return rpn_bases, rpn_windows
+
 
 #------------------------------------------------------------------------------
 
@@ -53,33 +58,37 @@ def make_rpn_windows(cfg, ps):
 # this is in gpu
 def torch_rpn_nms(cfg, mode, inputs, probs_flat, deltas_flat, windows):
 
-    if mode in ['train',]:
-        nms_threshold  = cfg.rpn_train_nms_threshold
-        nms_min_size   = cfg.rpn_train_nms_min_size
-        nms_pre_top_n  = cfg.rpn_train_nms_pre_top_n
+    if mode in [
+            'train',
+    ]:
+        nms_threshold = cfg.rpn_train_nms_threshold
+        nms_min_size = cfg.rpn_train_nms_min_size
+        nms_pre_top_n = cfg.rpn_train_nms_pre_top_n
         nms_post_top_n = cfg.rpn_train_nms_post_top_n
 
-    elif mode in ['eval', 'valid', 'test',]:
-        nms_threshold  = cfg.rpn_test_nms_threshold
-        nms_min_size   = cfg.rpn_test_nms_min_size
-        nms_pre_top_n  = cfg.rpn_test_nms_pre_top_n
+    elif mode in [
+            'eval',
+            'valid',
+            'test',
+    ]:
+        nms_threshold = cfg.rpn_test_nms_threshold
+        nms_min_size = cfg.rpn_test_nms_min_size
+        nms_pre_top_n = cfg.rpn_test_nms_pre_top_n
         nms_post_top_n = cfg.rpn_test_nms_post_top_n
     else:
-        raise ValueError('rpn_nms(): invalid mode = %s?'%mode)
+        raise ValueError('rpn_nms(): invalid mode = %s?' % mode)
 
-
-    probs  = probs_flat.detach().data
+    probs = probs_flat.detach().data
     deltas = deltas_flat.detach().data
 
     batch_size, num_windows = probs_flat.size()
-    windows = torch.from_numpy(
-                np.repeat(windows[np.newaxis,:,:],[batch_size],0)).cuda()
+    windows = torch.from_numpy(np.repeat(windows[np.newaxis, :, :], [batch_size], 0)).cuda()
 
-     # Convert windows into proposals via box transformations
-    height, width = (inputs.size(2),inputs.size(3))  #original image width
-    boxes = torch_box_transform_inv(windows.view(-1,4) , deltas.view(-1,4))
+    # Convert windows into proposals via box transformations
+    height, width = (inputs.size(2), inputs.size(3))  #original image width
+    boxes = torch_box_transform_inv(windows.view(-1, 4), deltas.view(-1, 4))
     boxes = torch_clip_boxes(boxes, width, height)
-    boxes = boxes.view(batch_size,num_windows,4)
+    boxes = boxes.view(batch_size, num_windows, 4)
 
     # if nms_min_size[i] != -1: ##<todo>
     #     keep = torch_filter_boxes(boxes_i, nms_min_size[i])  #filter small size not implemented
@@ -95,27 +104,25 @@ def torch_rpn_nms(cfg, mode, inputs, probs_flat, deltas_flat, windows):
         ps, idx = ps.sort(0, descending=True)
         if nms_pre_top_n > 0:
             idx = idx[:nms_pre_top_n]
-            ps  = ps[:nms_pre_top_n].view(-1, 1)
-            bs  = bs[idx, :]
+            ps = ps[:nms_pre_top_n].view(-1, 1)
+            bs = bs[idx, :]
 
         # Non-maximal suppression
         keep = torch_nms(torch.cat((bs, ps), 1), nms_threshold)
         if nms_post_top_n > 0:
             keep = keep[:nms_post_top_n]
 
-
         num_keeps = len(keep)
-        proposal = torch.FloatTensor(num_keeps,7).cuda()
-        proposal[:,0  ]=b
-        proposal[:,1:5]=bs[keep]
-        proposal[:,5  ]=ps[keep]
-        proposal[:,6  ]=1  #class label
+        proposal = torch.FloatTensor(num_keeps, 7).cuda()
+        proposal[:, 0] = b
+        proposal[:, 1:5] = bs[keep]
+        proposal[:, 5] = ps[keep]
+        proposal[:, 6] = 1  #class label
 
         proposals.append(Variable(proposal))
 
     proposals = torch.cat(proposals, 0)
     return proposals
-
 
 
 #
@@ -133,7 +140,6 @@ def torch_rpn_nms(cfg, mode, inputs, probs_flat, deltas_flat, windows):
 #     return keep
 #
 #
-
 
 # def draw_rpn_post_nms(image, proposals, top=100):
 #
@@ -298,11 +304,6 @@ def torch_rpn_nms(cfg, mode, inputs, probs_flat, deltas_flat, windows):
 # #     return rois, roi_scores #<todo> modify roi return format later
 #
 
-#-----------------------------------------------------------------------------  
+#-----------------------------------------------------------------------------
 if __name__ == '__main__':
-    print( '%s: calling main function ... ' % os.path.basename(__file__))
-
-
-
- 
- 
+    print('%s: calling main function ... ' % os.path.basename(__file__))
