@@ -1,9 +1,5 @@
-# edit settings here
-ROOT_DIR = '/home/alex/kaggle/ds_bowl_2018'
-
-DATA_DIR = ROOT_DIR + '/input'  #'/media/root/5453d6d1-e517-4659-a3a8-d0a878ba4b60/data/kaggle/science2018/data' #
-RESULTS_DIR = ROOT_DIR + '/results'
-
+DATA_DIR = '../input'
+RESULTS_DIR = '../results'
 ##---------------------------------------------------------------------
 import os
 from datetime import datetime
