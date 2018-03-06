@@ -165,10 +165,8 @@ def evaluate(net, test_loader):
 
 #--------------------------------------------------------------
 def run_train():
-
     out_dir = RESULTS_DIR + '/mask-rcnn-gray-011a-debug'
     initial_checkpoint = RESULTS_DIR + '/mask-rcnn-gray-011a-debug/checkpoint/00012600_model.pth'
-    #
 
     pretrain_file = None  #imagenet pretrain
     ## setup  -----------------
@@ -337,6 +335,8 @@ def run_train():
     j = 0
     i = 0
 
+    last_saved_model_filepath = None
+
     while i < num_iters:  # loop over the dataset multiple times
         sum_train_loss = np.zeros(6, np.float32)
         sum_train_acc = 0.0
@@ -366,15 +366,19 @@ def run_train():
 
             #if 1:
             if i in iter_save:
-                torch.save(net.state_dict(), out_dir + '/checkpoint/%08d_model.pth' % (i))
-            """
+                model_filepath = out_dir + '/checkpoint/%08d_model.pth' % (i)
+                torch.save(net.state_dict(), model_filepath)
+                if last_saved_model_filepath:
+                    os.remove(last_saved_model_filepath)
+                last_saved_model_filepath = model_filepath
+                """
                 torch.save({
                     'optimizer': optimizer.state_dict(),
                     'iter'     : i,
                     'epoch'    : epoch,
                 }, out_dir +'/checkpoint/%08d_optimizer.pth'%(i))
 
-            """
+                """
 
             # learning rate schduler -------------
             if LR is not None:
@@ -420,7 +424,6 @@ def run_train():
                 sum_train_loss = np.zeros(6, np.float32)
                 sum_train_acc = 0.
                 sum = 0
-
 
             print('\r%0.4f %5.1f k %6.2f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %s  %d,%d,%s' % (\
                          rate, i/1000, epoch, num_products/1000000,
