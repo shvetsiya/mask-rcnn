@@ -1,7 +1,11 @@
+import os
+HOME_DIR = os.environ['HOME']
+ROOT_DIR = '..'
+
 DATA_DIR = '../input'
 RESULTS_DIR = '../results'
+
 ##---------------------------------------------------------------------
-import os
 from datetime import datetime
 PROJECT_PATH = os.path.dirname(os.path.realpath(__file__))
 IDENTIFIER = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
