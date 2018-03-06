@@ -1,11 +1,9 @@
 import os
-
-# edit settings here
 HOME_DIR = os.environ['HOME']
-ROOT_DIR = HOME_DIR + '/kaggle/ds_bowl_2018'
+ROOT_DIR = '..'
 
-DATA_DIR = ROOT_DIR + '/input'  #'/media/root/5453d6d1-e517-4659-a3a8-d0a878ba4b60/data/kaggle/science2018/data' #
-RESULTS_DIR = ROOT_DIR + '/results'
+DATA_DIR = '../input'
+RESULTS_DIR = '../results'
 
 ##---------------------------------------------------------------------
 from datetime import datetime

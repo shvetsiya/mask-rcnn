@@ -167,8 +167,7 @@ def evaluate(net, test_loader):
 def run_train():
 
     out_dir = RESULTS_DIR + '/mask-rcnn-gray-011a-debug'
-    initial_checkpoint = None  #\
-    #RESULTS_DIR + '/mask-rcnn-gray-011a-debug/checkpoint/00072200_model.pth'
+    initial_checkpoint = RESULTS_DIR + '/mask-rcnn-gray-011a-debug/checkpoint/00012600_model.pth'
     #
 
     pretrain_file = None  #imagenet pretrain
@@ -224,9 +223,10 @@ def run_train():
     start_iter = 0
     start_epoch = 0.
     if initial_checkpoint is not None:
-        checkpoint = torch.load(initial_checkpoint.replace('_model.pth', '_optimizer.pth'))
-        start_iter = checkpoint['iter']
-        start_epoch = checkpoint['epoch']
+        #checkpoint = torch.load(initial_checkpoint.replace('_model.pth', '_optimizer.pth'))
+        #checkpoint = torch.load(initial_checkpoint)
+        start_iter = 0  #checkpoint['iter']
+        start_epoch = 0  #checkpoint['epoch']
         #optimizer.load_state_dict(checkpoint['optimizer'])
 
     ## dataset ----------------------------------------
@@ -435,12 +435,13 @@ def run_train():
 
     if 1:  #save last
         torch.save(net.state_dict(), out_dir + '/checkpoint/%d_model.pth' % (i))
+        """
         torch.save({
             'optimizer': optimizer.state_dict(),
             'iter': i,
             'epoch': epoch,
         }, out_dir + '/checkpoint/%d_optimizer.pth' % (i))
-
+        """
     log.write('\n')
 
 
