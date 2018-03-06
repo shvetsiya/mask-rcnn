@@ -222,7 +222,7 @@ def do_submit():
     else:
         print("Submission is complete")
 
-    submission_df.to_csv('{}/submission_{}.cvs'.format(RESULTS_DIR, IDENTIFIER, index=False))
+    submission_df.to_csv('{}/submission_{}.cvs'.format(RESULTS_DIR, IDENTIFIER), index=False)
 
 
 #--------------------------------------------------------------
