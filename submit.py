@@ -1,12 +1,13 @@
 import os, sys
 sys.path.append(os.path.dirname(__file__))
 
+import numpy as np
+import pandas as pd
 from train import *
 
 
 ## overwrite functions ###
 def submit_augment(image, index):
-
     original_image = image.copy()
     image = resize_to_factor(image, factor=16)
     input = image.transpose([2, 0, 1])
@@ -21,6 +22,32 @@ def submit_collate(batch):
     original_images = [batch[b][1] for b in range(batch_size)]
     indices = [batch[b][2] for b in range(batch_size)]
     return [inputs, original_images, indices]
+
+
+def rle_encoding(mask):
+    dots = np.where(mask.T.flatten() == 1)[0]
+    run_lengths = []
+    prev = -2
+    for b in dots:
+        if (b > prev + 1): run_lengths.extend((b + 1, 0))
+        run_lengths[-1] += 1
+        prev = b
+    return run_lengths
+
+
+def mask_to_rles(multi_mask):
+    for i in range(1, int(multi_mask.max()) + 1):
+        yield rle_encoding(multi_mask == i)
+
+
+def resize_multi_mask(multi_mask, desired_shape):
+    result_multi_mask = np.zeros(desired_shape)
+    old_w, old_h = multi_mask.shape
+    new_w, new_h = desired_shape
+    for x in range(new_w):
+        for y in range(new_h):
+            result_multi_mask[x, y] = multi_mask[round(x * old_w / new_w), round(y * old_h / new_h)]
+    return result_multi_mask
 
 
 def do_submit():
@@ -57,9 +84,9 @@ def do_submit():
     log.write('** dataset setting **\n')
 
     test_dataset = ScienceDataset(
-        #'test1_ids_gray_only_53', mode='test',
-        #'train1_ids_gray_only1_500', mode='test',
-        'valid1_ids_gray_only1_43',
+        #'train1_ids_gray_only1_500',
+        #'valid1_ids_gray_only1_43',
+        'test1_ids_gray_only_65.txt',
         mode='test',
         transform=submit_augment)
     test_loader = DataLoader(
@@ -76,13 +103,16 @@ def do_submit():
     start = timer()
 
     predicts = []
-    n = 0
+    progress = 0
+    new_test_ids = []
+    rles = []
+    empty_mask_ids = []
     for inputs, original_images, indices in test_loader:
         batch_size = len(indices)
 
         print(
-            '\rpredicting: %10d/%d (%0.0f %%)  %0.2f min' % (n, test_num, 100 * n / test_num,
-                                                             (timer() - start) / 60),
+            '\rpredicting: %10d/%d (%0.0f %%)  %0.2f min' %
+            (progress, test_num, 100 * progress / test_num, (timer() - start) / 60),
             end='',
             flush=True)
         time.sleep(0.01)
@@ -104,12 +134,13 @@ def do_submit():
             image = np.clip(image.astype(np.float32) * 2.5, 0, 255)  #improve contrast
 
             multi_mask = masks[b]
+
             multi_mask_overlay = multi_mask_to_overlay(
                 multi_mask)  #<todo> resize to orginal image size, etc ...
 
             contour_overlay = image.copy()
             num_masks = int(multi_mask.max())
-            for n in range(num_masks):
+            for n in range(1, num_masks + 1):
                 thresh = (multi_mask == n)
                 contour = thresh_to_inner_contour(thresh)
                 contour = contour.astype(np.float32) * 0.5
@@ -148,8 +179,18 @@ def do_submit():
             # all   = np.hstack((image, prob, prob_overlay, delta_overlay, nms_overlay, )).astype(np.uint8)
             #
             # image_show('all',all)
+
+            original_size_multi_mask = resize_multi_mask(multi_mask, original_image.shape[:2])
             id = test_dataset.ids[indices[b]]
             name = id.split('/')[-1]
+
+            if num_masks == 0:
+                empty_mask_ids.append(name)
+                original_size_multi_mask[0, 0] = 1
+
+            rle = list(mask_to_rles(original_size_multi_mask))
+            rles.extend(rle)
+            new_test_ids.extend([name] * len(rle))
 
             cv2.imwrite(out_dir + '/submit/overlays/%s.multi_mask.png' % (name), multi_mask_overlay)
             cv2.imwrite(out_dir + '/submit/overlays/%s.contour.png' % (name), contour_overlay)
@@ -165,15 +206,23 @@ def do_submit():
             #image_show('contour_overlay', contour_overlay)
             #cv2.waitKey(0)
 
-        n += batch_size
+        progress += batch_size
 
-    print('\n')
-    assert (n == len(test_loader.sampler) and n == test_num)
+    print('\n\nPerformed {} images'.format(progress))
+    if empty_mask_ids:
+        print("\nDidn't find masks for:\n{}\n".format('\n'.join(empty_mask_ids)))
 
-    ## submission csv  ----------------------------
-    # df = pd.DataFrame({ 'ImageId' : cvs_ImageId , 'EncodedPixels' : cvs_EncodedPixels})
-    # df.to_csv(csv_file, index=False, columns=['ImageId', 'EncodedPixels'])
-    #
+    submission_df = pd.DataFrame()
+    submission_df['ImageId'] = new_test_ids
+    submission_df['EncodedPixels'] = pd.Series(rles).apply(lambda x: ' '.join(str(y) for y in x))
+
+    if len(np.unique(submission_df["ImageId"])) != test_num:
+        print('WARNING: Submission is not complete')
+        print('Completed {} out of {}'.format(len(np.unique(submission_df["ImageId"])), test_num))
+    else:
+        print("Submission is complete")
+
+    submission_df.to_csv('{}/submission_{}.cvs'.format(RESULTS_DIR, IDENTIFIER, index=False))
 
 
 #--------------------------------------------------------------
