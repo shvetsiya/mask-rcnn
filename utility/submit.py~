@@ -334,7 +334,7 @@ def run_npy_to_sumbit_csv():
         color_overlay = multi_mask_to_color_overlay(multi_mask)
         color1_overlay = multi_mask_to_contour_overlay(multi_mask, color_overlay)
         contour_overlay = multi_mask_to_contour_overlay(multi_mask, image, [0, 255, 0])
-        #all = np.hstack((image, contour_overlay, color1_overlay)).astype(np.uint8)
+        all = np.hstack((image, contour_overlay, color1_overlay)).astype(np.uint8)
         #image_show('all', all)
         #cv2.waitKey(1)
 
@@ -354,7 +354,7 @@ def run_npy_to_sumbit_csv():
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_submit()
+    #run_submit()
     run_npy_to_sumbit_csv()
 
     print('\nsucess!')

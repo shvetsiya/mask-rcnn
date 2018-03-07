@@ -354,7 +354,7 @@ def run_npy_to_sumbit_csv():
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_submit()
+    #run_submit()
     run_npy_to_sumbit_csv()
 
     print('\nsucess!')
