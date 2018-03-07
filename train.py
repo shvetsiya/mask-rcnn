@@ -324,11 +324,13 @@ def run_train():
             #if 1:
             if i in iter_save:
                 torch.save(net.state_dict(), out_dir + '/checkpoint/%08d_model.pth' % (i))
+                """
                 torch.save({
                     'optimizer': optimizer.state_dict(),
                     'iter': i,
                     'epoch': epoch,
                 }, out_dir + '/checkpoint/%08d_optimizer.pth' % (i))
+                """
                 with open(out_dir + '/checkpoint/configuration.pkl', 'wb') as pickle_file:
                     pickle.dump(cfg, pickle_file, pickle.HIGHEST_PROTOCOL)
 
@@ -492,12 +494,13 @@ def run_train():
 
     if 1:  #save last
         torch.save(net.state_dict(), out_dir + '/checkpoint/%d_model.pth' % (i))
+        """
         torch.save({
             'optimizer': optimizer.state_dict(),
             'iter': i,
             'epoch': epoch,
         }, out_dir + '/checkpoint/%d_optimizer.pth' % (i))
-
+        """
     log.write('\n')
 
 
