@@ -1,4 +1,5 @@
 from common import *
+import matplotlib.cm
 
 
 # draw -----------------------------------
@@ -62,7 +63,6 @@ def draw_dotted_rect(image, pt1, pt2, color, thickness=1, gap=3):
 def draw_screen_rect(image, pt1, pt2, color, alpha=0.5):
     x1, y1 = pt1
     x2, y2 = pt2
-
     image[y1:y2, x1:
           x2, :] = (1 - alpha) * image[y1:y2, x1:x2, :] + (alpha) * np.array(color, np.uint8)
 
@@ -89,3 +89,37 @@ def draw_screen_rect(image, pt1, pt2, color, alpha=0.5):
 #     ## drawContours(image, contours, contourIdx, color, thickness=None, lineType=None, hierarchy=None, maxLevel=None, offset=None): # real signature unknown; restored from __doc__
 #
 #
+
+
+def to_color(s, color=None):
+
+    if type(color) in [str] or color is None:
+        #https://matplotlib.org/xkcd/examples/color/colormaps_reference.html
+
+        if color is None: color = 'cool'
+        color = matplotlib.get_cmap(color)(s)
+        b = int(255 * color[2])
+        g = int(255 * color[1])
+        r = int(255 * color[0])
+
+    elif type(color) in [list, tuple]:
+        b = int(s * color[0])
+        g = int(s * color[1])
+        r = int(s * color[2])
+
+    return b, g, r
+
+
+# main #################################################################
+if __name__ == '__main__':
+    print('%s: calling main function ... ' % os.path.basename(__file__))
+
+    image = np.zeros((50, 50, 3), np.uint8)
+    cv2.rectangle(image, (0, 0), (49, 49), (0, 0, 255), 1)  #inclusive
+
+    image[8, 8] = [255, 255, 255]
+
+    image_show('image', image, 10)
+    cv2.waitKey(0)
+
+    print('\nsucess!')

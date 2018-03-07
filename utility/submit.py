@@ -109,6 +109,11 @@ def revert(net, images):
         index = (net.detections[:, 0] == b).nonzero().view(-1)
         net.detections = torch_clip_proposals(net.detections, index, width, height)
 
+        net.masks[b] = net.masks[b][:height, :width]
+
+    return net, image
+
+
 #-----------------------------------------------------------------------------------
 def submit_augment(image, index):
     pad_image = pad_to_factor(image, factor=16)
@@ -220,7 +225,6 @@ def run_submit():
         masks = net.masks
 
         for b in range(batch_size):
-
             #image0 = (inputs[b].transpose((1,2,0))*255).astype(np.uint8)
             image = images[b]
             mask = masks[b]
@@ -232,7 +236,6 @@ def run_submit():
             all = np.hstack((image, contour_overlay, color1_overlay))
 
             # --------------------------------------------
-            
             id = test_dataset.ids[indices[b]]
             name = id.split('/')[-1]
 
@@ -267,7 +270,6 @@ def filter_small(multi_mask, threshold):
     j = 0
     for i in range(num_masks):
         thresh = (multi_mask == (i + 1))
- 
 
         area = thresh.sum()
         if area < threshold:
@@ -352,7 +354,7 @@ def run_npy_to_sumbit_csv():
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_submit()
+    #run_submit()
     run_npy_to_sumbit_csv()
 
     print('\nsucess!')

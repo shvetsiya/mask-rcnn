@@ -109,6 +109,7 @@ def evaluate(net, test_loader):
 
 #--------------------------------------------------------------
 def run_train():
+
     out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
     initial_checkpoint = RESULTS_DIR + '/mask-rcnn-gray-011a-debug/checkpoint/00016500_model.pth'
     ##
@@ -116,7 +117,6 @@ def run_train():
     pretrain_file = \
         None #RESULTS_DIR + '/mask-single-shot-dummy-1a/checkpoint/00028000_model.pth'
     skip = ['crop', 'mask']
-
 
     ## setup  -----------------
     os.makedirs(out_dir + '/checkpoint', exist_ok=True)
@@ -292,8 +292,6 @@ def run_train():
     j = 0
     i = 0
 
-    last_saved_model_filepath = None
-
     while i < num_iters:  # loop over the dataset multiple times
         sum_train_loss = np.zeros(6, np.float32)
         sum_train_acc = 0.0
@@ -326,13 +324,11 @@ def run_train():
             #if 1:
             if i in iter_save:
                 torch.save(net.state_dict(), out_dir + '/checkpoint/%08d_model.pth' % (i))
-                """
                 torch.save({
                     'optimizer': optimizer.state_dict(),
                     'iter': i,
                     'epoch': epoch,
                 }, out_dir + '/checkpoint/%08d_optimizer.pth' % (i))
-                """
                 with open(out_dir + '/checkpoint/configuration.pkl', 'wb') as pickle_file:
                     pickle.dump(cfg, pickle_file, pickle.HIGHEST_PROTOCOL)
 
@@ -375,8 +371,8 @@ def run_train():
                 sum_train_acc = 0.
                 sum = 0
 
-            print('\r%0.4f %5.1f k %6.1f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %s  %d,%d,%s' % (\
 
+            print('\r%0.4f %5.1f k %6.1f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %s  %d,%d,%s' % (\
                          rate, i/1000, epoch, num_products/1000000,
                          valid_loss[0], valid_loss[1], valid_loss[2], valid_loss[3], valid_loss[4], valid_loss[5],#valid_acc,
                          train_loss[0], train_loss[1], train_loss[2], train_loss[3], train_loss[4], train_loss[5],#train_acc,
@@ -496,13 +492,12 @@ def run_train():
 
     if 1:  #save last
         torch.save(net.state_dict(), out_dir + '/checkpoint/%d_model.pth' % (i))
-        """
         torch.save({
             'optimizer': optimizer.state_dict(),
             'iter': i,
             'epoch': epoch,
         }, out_dir + '/checkpoint/%d_optimizer.pth' % (i))
-        """
+
     log.write('\n')
 
 
