@@ -29,7 +29,8 @@ def rle_encoding(mask):
     run_lengths = []
     prev = -2
     for b in dots:
-        if (b > prev + 1): run_lengths.extend((b + 1, 0))
+        if (b > prev + 1):
+            run_lengths.extend((b + 1, 0))
         run_lengths[-1] += 1
         prev = b
     return run_lengths
@@ -86,7 +87,7 @@ def do_submit():
     test_dataset = ScienceDataset(
         #'train1_ids_gray_only1_500',
         #'valid1_ids_gray_only1_43',
-        'test1_ids_gray_only_65.txt',
+        'test1_ids_65.txt',
         mode='test',
         transform=submit_augment)
     test_loader = DataLoader(
@@ -133,12 +134,13 @@ def do_submit():
             image = (images[b].transpose((1, 2, 0)) * 255).astype(np.uint8)
             image = np.clip(image.astype(np.float32) * 2.5, 0, 255)  #improve contrast
 
-            multi_mask = masks[b]
+            multi_mask = resize_multi_mask(masks[b], original_image.shape[:2])
 
             multi_mask_overlay = multi_mask_to_overlay(
                 multi_mask)  #<todo> resize to orginal image size, etc ...
 
-            contour_overlay = image.copy()
+            contour_overlay = cv2.resize(image.copy(),
+                                         (original_image.shape[1], original_image.shape[0]))
             num_masks = int(multi_mask.max())
             for n in range(1, num_masks + 1):
                 thresh = (multi_mask == n)
