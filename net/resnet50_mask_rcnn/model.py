@@ -2,7 +2,7 @@ from common import *
 from net.lib.roi_align_pool_tf.module import RoIAlign as Crop
 
 if __name__ == '__main__':
-    from configuration import *
+    from configuration import Configuration
     from layer.rpn_multi_nms import *
     from layer.rpn_multi_target import *
     from layer.rpn_multi_loss import *
@@ -14,7 +14,7 @@ if __name__ == '__main__':
     from layer.mask_loss import *
 
 else:
-    from .configuration import *
+    from .configuration import Configuration
     from .layer.rpn_multi_nms import *
     from .layer.rpn_multi_target import *
     from .layer.rpn_multi_loss import *
@@ -332,7 +332,7 @@ class MaskHead(nn.Module):
 
 class MaskRcnnNet(nn.Module):
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: Configuration):
         super(MaskRcnnNet, self).__init__()
         self.version = 'net version \'mask-rcnn-resnet50-fpn\''
         self.cfg = cfg
