@@ -2,6 +2,7 @@ import os, sys
 sys.path.append(os.path.dirname(__file__))
 
 import numpy as np
+import cv2
 
 # torch libs
 import torch
@@ -19,7 +20,7 @@ from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH
 
 from utility.file import Logger
 from net.resnet50_mask_rcnn.configuration import Configuration
-from net.resnet50_mask_rcnn.draw import draw_multi_proposal_metric, draw_mask_metric
+from net.resnet50_mask_rcnn.draw import draw_multi_proposal_metric, draw_mask_metric, image_show
 from net.resnet50_mask_rcnn.model import MaskRcnnNet
 from net.metric import compute_average_precision_for_mask, compute_precision_for_box
 from dataset.reader import ScienceDataset, multi_mask_to_annotation, instance_to_multi_mask, \
@@ -31,10 +32,11 @@ class Evaluator(object):
 
     def __init__(self):
         self.OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
+        self.OVERLAYS_DIR = self.OUT_DIR + '/evaluate/overlays'
         self.logger = Logger()
 
         ## setup  ---------------------------
-        os.makedirs(self.OUT_DIR + '/evaluate/overlays', exist_ok=True)
+        os.makedirs(self.OVERLAYS_DIR, exist_ok=True)
         os.makedirs(self.OUT_DIR + '/evaluate/npys', exist_ok=True)
         os.makedirs(self.OUT_DIR + '/checkpoint', exist_ok=True)
         os.makedirs(self.OUT_DIR + '/backup', exist_ok=True)
@@ -45,7 +47,7 @@ class Evaluator(object):
         logger.write('** some experiment setting **\n')
         logger.write('\tSEED         = %u\n' % SEED)
         logger.write('\tPROJECT_PATH = %s\n' % PROJECT_PATH)
-        logger.write('\tout_dir      = %s\n' % self.OUT_DIR)
+        logger.write('\tOUT_DIR      = %s\n' % self.OUT_DIR)
         logger.write('\n')
 
         ## dataset ----------------------------------------
@@ -118,58 +120,64 @@ class Evaluator(object):
 
         return [inputs, boxes, labels, instances, metas, images, indices]
 
+    def _save_prediction_png(self, name: str, mask, detection, truth_box, truth_label,
+                             truth_instance, image):
+        cfg = self.cfg
+
+        contour_overlay = multi_mask_to_contour_overlay(mask, image=image, color=[0, 255, 0])
+        color_overlay = multi_mask_to_color_overlay(mask, color='summer')
+        color_overlay_with_contour = multi_mask_to_contour_overlay(
+            mask, image=color_overlay, color=[255, 255, 255])
+
+        all1 = np.hstack((image, contour_overlay, color_overlay_with_contour))
+        all6 = draw_multi_proposal_metric(cfg, image, detection, truth_box, truth_label,
+                                          [0, 255, 255], [255, 0, 255], [255, 255, 0])
+        all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
+
+        cv2.imwrite('{}/{}_all1.png'.format(self.OVERLAYS_DIR, name), all1)
+        cv2.imwrite('{}/{}_all6.png'.format(self.OVERLAYS_DIR, name), all6)
+        cv2.imwrite('{}/{}_all7.png'.format(self.OVERLAYS_DIR, name), all7)
+
     def run_evaluate(self, model_checkpoint):
+        self.cfg = Configuration()
+
         logger = self.logger
 
-        cfg = Configuration()
-        net = MaskRcnnNet(cfg).cuda()
+        logger.write('\tmodel checkpoint = %s\n' % model_checkpoint)
+        net = MaskRcnnNet(self.cfg).cuda()
+        net.load_state_dict(torch.load(model_checkpoint, map_location=lambda storage, loc: storage))
+        net.set_mode('test')
+        logger.write('\tmodel type: %s\n\n' % (type(net)))
 
-        if model_checkpoint is not None:
-            logger.write('\tinitial_checkpoint = %s\n' % model_checkpoint)
-            net.load_state_dict(
-                torch.load(model_checkpoint, map_location=lambda storage, loc: storage))
-
-        logger.write('%s\n\n' % (type(net)))
-        logger.write('\n')
-
-        ## start evaluation here! ##############################################
-        logger.write('** start evaluation here! **\n')
+        logger.write('** starting evaluation! **\n\n')
+        logger.write('index | id | mask_average_precision (box_precision)\n')
         mask_average_precisions = []
         box_precisions_50 = []
 
         test_num = 0
-        test_loss = np.zeros(5, np.float32)
-        test_acc = 0
-        for i, (inputs, truth_boxes, truth_labels, truth_instances, metas, images,
-                indices) in enumerate(self.test_loader, 0):
-            if all((truth_label > 0).sum() == 0 for truth_label in truth_labels): continue
+        for inputs, truth_boxes, truth_labels, truth_instances, metas, images, indices in self.test_loader:
+            if all((truth_label > 0).sum() == 0 for truth_label in truth_labels):
+                continue
 
-            net.set_mode('test')
             with torch.no_grad():
                 inputs = Variable(inputs).cuda()
                 net(inputs, truth_boxes, truth_labels, truth_instances)
-                #loss = net.loss(inputs, truth_boxes,  truth_labels, truth_instances)
 
             # Resize results to original images shapes.
             self._revert(net, images)
 
-            batch_size, C, H, W = inputs.size()
-
-            # NOTE: Current version support batch_size==1 for variable size input. To use batch_size>1,
-            # need to fix code for net.windows, etc.
+            batch_size = inputs.size()[0]
+            # NOTE: Current version support batch_size==1 for variable size input. To use
+            # batch_size > 1, need to fix code for net.windows, etc.
             assert (batch_size == 1)
 
             inputs = inputs.data.cpu().numpy()
-
-            # window          = net.rpn_window
-            # rpn_logits_flat = net.rpn_logits_flat.data.cpu().numpy()
-            # rpn_deltas_flat = net.rpn_deltas_flat.data.cpu().numpy()
-            # proposals  = net.rpn_proposals
             masks = net.masks
             detections = net.detections.cpu().numpy()
 
             for index_in_batch in range(batch_size):
-                #image0 = (inputs[index_in_batch].transpose((1,2,0))*255).astype(np.uint8)
+                test_num += 1
+
                 image = images[index_in_batch]
                 height, width = image.shape[:2]
                 mask = masks[index_in_batch]
@@ -193,49 +201,19 @@ class Evaluator(object):
                 mask_average_precisions.append(mask_average_precision)
                 box_precisions_50.append(box_precision)
 
-                # --------------------------------------------
                 id = self.test_dataset.ids[indices[index_in_batch]]
                 name = id.split('/')[-1]
-                print('%d\t%s\t%0.5f  (%0.5f)' % (i, name, mask_average_precision, box_precision))
+                self._save_prediction_png(
+                    name,
+                    mask=mask,
+                    detection=detection,
+                    truth_box=truth_box,
+                    truth_label=truth_label,
+                    truth_instance=truth_instance,
+                    image=image)
 
-                #----
-                contour_overlay = multi_mask_to_contour_overlay(mask, image, color=[0, 255, 0])
-                color_overlay = multi_mask_to_color_overlay(mask, color='summer')
-                color1_overlay = multi_mask_to_contour_overlay(
-                    mask, color_overlay, color=[255, 255, 255])
-                all1 = np.hstack((image, contour_overlay, color1_overlay))
-
-                all6 = draw_multi_proposal_metric(cfg, image, detection, truth_box, truth_label,
-                                                  [0, 255, 255], [255, 0, 255], [255, 255, 0])
-                all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
-
-                #image_show('overlay_mask',overlay_mask)
-                #image_show('overlay_truth',overlay_truth)
-                #image_show('overlay_error',overlay_error)
-                # image_show('all1', all1)
-                # image_show('all6', all6)
-                # image_show('all7', all7)
-                # cv2.waitKey(0)
-
-            # print statistics  ------------
-            test_acc += 0  #batch_size*acc[0][0]
-            # test_loss += batch_size*np.array((
-            #                    loss.cpu().data.numpy(),
-            #                    net.rpn_cls_loss.cpu().data.numpy(),
-            #                    net.rpn_reg_loss.cpu().data.numpy(),
-            #                     0,0,
-            #                  ))
-            test_num += batch_size
-
-        #assert(test_num == len(self.test_loader.sampler))
-        test_acc = test_acc / test_num
-        test_loss = test_loss / test_num
-
-        logger.write('model_checkpoint  = %s\n' % (model_checkpoint))
-        logger.write('test_acc  = %0.5f\n' % (test_acc))
-        logger.write('test_loss = %0.5f\n' % (test_loss[0]))
-        logger.write('test_num  = %d\n' % (test_num))
-        logger.write('\n')
+                print('%d\t%s\t%0.5f  (%0.5f)' % (test_num, name, mask_average_precision,
+                                                  box_precision))
 
         mask_average_precisions = np.array(mask_average_precisions)
         box_precisions_50 = np.array(box_precisions_50)

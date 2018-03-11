@@ -97,7 +97,6 @@ def multi_mask_to_color_overlay(multi_mask, image=None, color=None):
 
 
 def multi_mask_to_contour_overlay(multi_mask, image=None, color=[255, 255, 255]):
-
     height, width = multi_mask.shape[:2]
     overlay = np.zeros((height, width, 3), np.uint8) if image is None else image.copy()
     num_masks = int(multi_mask.max())
