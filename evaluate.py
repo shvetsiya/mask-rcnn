@@ -29,6 +29,47 @@ from dataset.transform import pad_to_factor
 
 class Evaluator(object):
 
+    def __init__(self):
+        self.OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
+        self.logger = Logger()
+
+        ## setup  ---------------------------
+        os.makedirs(self.OUT_DIR + '/evaluate/overlays', exist_ok=True)
+        os.makedirs(self.OUT_DIR + '/evaluate/npys', exist_ok=True)
+        os.makedirs(self.OUT_DIR + '/checkpoint', exist_ok=True)
+        os.makedirs(self.OUT_DIR + '/backup', exist_ok=True)
+
+        logger = self.logger
+        logger.open(self.OUT_DIR + '/log.evaluate.txt', mode='a')
+        logger.write('\n--- [START %s] %s\n\n' % (IDENTIFIER, '-' * 64))
+        logger.write('** some experiment setting **\n')
+        logger.write('\tSEED         = %u\n' % SEED)
+        logger.write('\tPROJECT_PATH = %s\n' % PROJECT_PATH)
+        logger.write('\tout_dir      = %s\n' % self.OUT_DIR)
+        logger.write('\n')
+
+        ## dataset ----------------------------------------
+        logger.write('** dataset setting **\n')
+
+        self.test_dataset = ScienceDataset(
+            #'train1_ids_gray2_500', mode='train',
+            'valid1_ids_gray2_43',
+            mode='train',
+            #'debug1_ids_gray2_10', mode='train',
+            transform=self._eval_augment)
+        self.test_loader = DataLoader(
+            self.test_dataset,
+            sampler=SequentialSampler(self.test_dataset),
+            batch_size=1,
+            drop_last=False,
+            num_workers=4,
+            pin_memory=True,
+            collate_fn=self._eval_collate)
+
+        logger.write('\ttest_dataset.split = %s\n' % (self.test_dataset.split))
+        logger.write('\tlen(self.test_dataset)  = %d\n' % (len(self.test_dataset)))
+        logger.write('\n')
+
     def _revert(self, net: MaskRcnnNet, images: list):
         """Adjusts the net results to original images sizes.
 
@@ -77,61 +118,22 @@ class Evaluator(object):
 
         return [inputs, boxes, labels, instances, metas, images, indices]
 
-    def run_evaluate(self):
-        out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
-        initial_checkpoint = \
-            RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00008500_model.pth'
-
-        ## setup  ---------------------------
-        os.makedirs(out_dir + '/evaluate/overlays', exist_ok=True)
-        os.makedirs(out_dir + '/evaluate/npys', exist_ok=True)
-        os.makedirs(out_dir + '/checkpoint', exist_ok=True)
-        os.makedirs(out_dir + '/backup', exist_ok=True)
-
-        log = Logger()
-        log.open(out_dir + '/log.evaluate.txt', mode='a')
-        log.write('\n--- [START %s] %s\n\n' % (IDENTIFIER, '-' * 64))
-        log.write('** some experiment setting **\n')
-        log.write('\tSEED         = %u\n' % SEED)
-        log.write('\tPROJECT_PATH = %s\n' % PROJECT_PATH)
-        log.write('\tout_dir      = %s\n' % out_dir)
-        log.write('\n')
+    def run_evaluate(self, model_checkpoint):
+        logger = self.logger
 
         cfg = Configuration()
         net = MaskRcnnNet(cfg).cuda()
 
-        if initial_checkpoint is not None:
-            log.write('\tinitial_checkpoint = %s\n' % initial_checkpoint)
+        if model_checkpoint is not None:
+            logger.write('\tinitial_checkpoint = %s\n' % model_checkpoint)
             net.load_state_dict(
-                torch.load(initial_checkpoint, map_location=lambda storage, loc: storage))
+                torch.load(model_checkpoint, map_location=lambda storage, loc: storage))
 
-        log.write('%s\n\n' % (type(net)))
-        log.write('\n')
-
-        ## dataset ----------------------------------------
-        log.write('** dataset setting **\n')
-
-        test_dataset = ScienceDataset(
-            #'train1_ids_gray2_500', mode='train',
-            'valid1_ids_gray2_43',
-            mode='train',
-            #'debug1_ids_gray2_10', mode='train',
-            transform=self._eval_augment)
-        test_loader = DataLoader(
-            test_dataset,
-            sampler=SequentialSampler(test_dataset),
-            batch_size=1,
-            drop_last=False,
-            num_workers=4,
-            pin_memory=True,
-            collate_fn=self._eval_collate)
-
-        log.write('\ttest_dataset.split = %s\n' % (test_dataset.split))
-        log.write('\tlen(test_dataset)  = %d\n' % (len(test_dataset)))
-        log.write('\n')
+        logger.write('%s\n\n' % (type(net)))
+        logger.write('\n')
 
         ## start evaluation here! ##############################################
-        log.write('** start evaluation here! **\n')
+        logger.write('** start evaluation here! **\n')
         mask_average_precisions = []
         box_precisions_50 = []
 
@@ -139,7 +141,7 @@ class Evaluator(object):
         test_loss = np.zeros(5, np.float32)
         test_acc = 0
         for i, (inputs, truth_boxes, truth_labels, truth_instances, metas, images,
-                indices) in enumerate(test_loader, 0):
+                indices) in enumerate(self.test_loader, 0):
             if all((truth_label > 0).sum() == 0 for truth_label in truth_labels): continue
 
             net.set_mode('test')
@@ -192,7 +194,7 @@ class Evaluator(object):
                 box_precisions_50.append(box_precision)
 
                 # --------------------------------------------
-                id = test_dataset.ids[indices[index_in_batch]]
+                id = self.test_dataset.ids[indices[index_in_batch]]
                 name = id.split('/')[-1]
                 print('%d\t%s\t%0.5f  (%0.5f)' % (i, name, mask_average_precision, box_precision))
 
@@ -225,26 +227,29 @@ class Evaluator(object):
             #                  ))
             test_num += batch_size
 
-        #assert(test_num == len(test_loader.sampler))
+        #assert(test_num == len(self.test_loader.sampler))
         test_acc = test_acc / test_num
         test_loss = test_loss / test_num
 
-        log.write('initial_checkpoint  = %s\n' % (initial_checkpoint))
-        log.write('test_acc  = %0.5f\n' % (test_acc))
-        log.write('test_loss = %0.5f\n' % (test_loss[0]))
-        log.write('test_num  = %d\n' % (test_num))
-        log.write('\n')
+        logger.write('model_checkpoint  = %s\n' % (model_checkpoint))
+        logger.write('test_acc  = %0.5f\n' % (test_acc))
+        logger.write('test_loss = %0.5f\n' % (test_loss[0]))
+        logger.write('test_num  = %d\n' % (test_num))
+        logger.write('\n')
 
         mask_average_precisions = np.array(mask_average_precisions)
         box_precisions_50 = np.array(box_precisions_50)
-        log.write('-------------\n')
-        log.write('mask_average_precision = %0.5f\n' % mask_average_precisions.mean())
-        log.write('box_precision@0.5 = %0.5f\n' % box_precisions_50.mean())
-        log.write('\n')
+        logger.write('-------------\n')
+        logger.write('mask_average_precision = %0.5f\n' % mask_average_precisions.mean())
+        logger.write('box_precision@0.5 = %0.5f\n' % box_precisions_50.mean())
+        logger.write('\n')
 
 
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
+
+    model_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00008500_model.pth'
     evaluator = Evaluator()
-    evaluator.run_evaluate()
+    evaluator.run_evaluate(model_checkpoint)
+
     print('\nsucess!')
