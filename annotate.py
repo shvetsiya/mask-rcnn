@@ -32,7 +32,7 @@ def run_make_train_annotation():
     split = 'train1_ids_all_670'
     ids = read_list_from_file(DATA_DIR + '/split/' + split, comment='#')
 
-    data_dir = DATA_DIR + '/image/stage1_train_kostia'
+    data_dir = DATA_DIR + '/image/stage1_train'
     os.makedirs(data_dir + '/multi_masks', exist_ok=True)
     os.makedirs(data_dir + '/overlays', exist_ok=True)
     os.makedirs(data_dir + '/images', exist_ok=True)

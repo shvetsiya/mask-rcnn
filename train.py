@@ -110,22 +110,18 @@ def evaluate(net, test_loader):
 #--------------------------------------------------------------
 def run_train():
     out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
-<<<<<<< HEAD
-    initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00022500_model.pth'
-=======
     initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
->>>>>>> 56c15d8dddfc4e812b7c44c5498b81bec17acb35
     ##
 
-    pretrain_file = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00022500_model.pth'
-    #None #RESULTS_DIR + '/mask-single-shot-dummy-1a/checkpoint/00028000_model.pth'
+    pretrain_file = \
+        None #RESULTS_DIR + '/mask-single-shot-dummy-1a/checkpoint/00028000_model.pth'
     skip = ['crop', 'mask']
 
     ## setup  -----------------
     os.makedirs(out_dir + '/checkpoint', exist_ok=True)
     os.makedirs(out_dir + '/train', exist_ok=True)
-    #os.makedirs(out_dir + '/backup', exist_ok=True)
-    #backup_project_as_zip(PROJECT_PATH, out_dir + '/backup/code.train.%s.zip' % IDENTIFIER)
+    os.makedirs(out_dir + '/backup', exist_ok=True)
+    backup_project_as_zip(PROJECT_PATH, out_dir + '/backup/code.train.%s.zip' % IDENTIFIER)
 
     log = Logger()
     log.open(out_dir + '/log.train.txt', mode='a')
@@ -164,12 +160,13 @@ def run_train():
     iter_smooth = 20
     iter_log = 50
     iter_valid = 100
-    iter_save = [0, num_iters - 1] + list(range(0, num_iters, 500))  #1*1000
+    iter_save   = [0, num_iters-1]\
+                   + list(range(0,num_iters,500))#1*1000
 
     LR = None  #LR = StepLR([ (0, 0.01),  (200, 0.001),  (300, -1)])
     optimizer = optim.SGD(
         filter(lambda p: p.requires_grad, net.parameters()),
-        lr=0.001 / iter_accum,
+        lr=0.01 / iter_accum,
         momentum=0.9,
         weight_decay=0.0001)
 
@@ -276,7 +273,7 @@ def run_train():
 
     log.write(' images_per_epoch = %d\n\n' % len(train_dataset))
     log.write(
-        ' rate    iter   epoch  num   | valid_loss                          | train_loss               | batch_loss               |  time          \n'
+        ' rate    iter   epoch  num   | valid_loss               | train_loss               | batch_loss               |  time          \n'
     )
     log.write(
         '-------------------------------------------------------------------------------------------------------------------------------\n'
@@ -467,11 +464,9 @@ def run_train():
                     # image_show('rpn_proposal',all3,1)
                     # image_show('truth_box',all4,1)
                     # image_show('rpn_precision',all5,1)
-
-                    # imshow is here
-                    #image_show('rpn_precision', all5, 1)
-                    #image_show('rcnn_precision', all6, 1)
-                    #image_show('mask_precision', all7, 1)
+                    image_show('rpn_precision', all5, 1)
+                    image_show('rcnn_precision', all6, 1)
+                    image_show('mask_precision', all7, 1)
 
                     # summary = np.vstack([
                     #     all5,
