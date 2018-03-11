@@ -58,8 +58,8 @@ class Evaluator(object):
         logger.write('** dataset setting **\n')
 
         self.test_dataset = ScienceDataset(
-            # 'train1_ids_gray2_500',
-            'valid1_ids_gray2_43',
+            'train1_ids_gray2_500',
+            # 'valid1_ids_gray2_43',
             mode='train',
             #'debug1_ids_gray2_10', mode='train',
             transform=self._eval_augment)
@@ -166,6 +166,16 @@ class Evaluator(object):
                     'is_hit': result == HIT
                 }
 
+    def _append_results_stats(self, name: str, box_precision, thresholds, mask_average_precision,
+                              overall_results):
+        """Appends overall precision results to the results dataframe.
+        """
+        results_row = {'id': name, 'mask_average_precision': mask_average_precision}
+        for threshold_index, threshold in enumerate(thresholds):
+            results_row['box_precision_{}'.format(int(
+                threshold * 100))] = box_precision[threshold_index]
+        overall_results.loc[overall_results.shape[0]] = results_row
+
     def run_evaluate(self, model_checkpoint):
         self.cfg = Configuration()
 
@@ -173,11 +183,9 @@ class Evaluator(object):
         thresholds = [0.5, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
 
         # TODO(alexander): Populate this.
-        overall_results_columns = ['id']
+        overall_results_columns = ['id', 'mask_average_precision']
         for threshold in thresholds:
             overall_results_columns.append('box_precision_{}'.format(int(threshold * 100)))
-        for threshold in thresholds:
-            overall_results_columns.append('mask_precision_{}'.format(int(threshold * 100)))
         overall_results = pd.DataFrame(columns=overall_results_columns)
 
         bb_results = pd.DataFrame(columns=['id', 'w', 'h', 'threshold', 'is_hit'])
@@ -241,16 +249,17 @@ class Evaluator(object):
 
                 box_precision, box_recall, box_result, truth_box_result = \
                     compute_precision_for_box(box, truth_box, truth_label, thresholds)
-                box_precision = box_precision[0]
 
                 mask_average_precisions.append(mask_average_precision)
-                box_precisions_50.append(box_precision)
+                box_precisions_50.append(box_precision[0])
 
                 id = self.test_dataset.ids[indices[index_in_batch]]
                 name = id.split('/')[-1]
 
                 self._append_hit_and_miss_stats(name, truth_box, truth_box_result, thresholds,
                                                 bb_results)
+                self._append_results_stats(name, box_precision, thresholds, mask_average_precision,
+                                           overall_results)
                 self._save_prediction_png(
                     name,
                     mask=mask,
@@ -261,7 +270,7 @@ class Evaluator(object):
                     image=image)
 
                 print('%d\t%s\t%0.5f  (%0.5f)' % (test_num, name, mask_average_precision,
-                                                  box_precision))
+                                                  box_precision[0]))
 
         for threshold in thresholds:
             hit_results = bb_results[(bb_results.is_hit == True) &
@@ -272,6 +281,7 @@ class Evaluator(object):
             plt.savefig('{}/hits_and_misses_{}.png'.format(self.STATS_DIR, int(threshold * 100)))
 
         bb_results.to_csv(self.STATS_DIR + '/bb_results.csv')
+        overall_results.to_csv(self.STATS_DIR + '/overall_results.csv')
 
         mask_average_precisions = np.array(mask_average_precisions)
         box_precisions_50 = np.array(box_precisions_50)
