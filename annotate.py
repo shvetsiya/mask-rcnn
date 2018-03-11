@@ -79,15 +79,15 @@ def run_make_train_annotation():
         cv2.imwrite(data_dir + '/overlays/%s.png' % name, all)
         cv2.imwrite(data_dir + '/images/%s.png' % name, image)
 
-        image_show('all', all)
-        cv2.waitKey(1)
+        # image_show('all', all)
+        # cv2.waitKey(1)
 
 
 # main #################################################################
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    #run_make_train_annotation()
+    run_make_train_annotation()
     run_make_test_annotation()
 
     print('sucess!')

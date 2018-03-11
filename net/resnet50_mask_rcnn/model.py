@@ -101,7 +101,7 @@ def make_layer_c(in_planes, planes, out_planes, num_blocks, stride):
 
 class FeatureNet(nn.Module):
 
-    def __init__(self, cfg, in_channels, out_channels=256):
+    def __init__(self, cfg: Configuration, in_channels, out_channels=256):
         super(FeatureNet, self).__init__()
         self.cfg = cfg
 
@@ -144,7 +144,7 @@ class FeatureNet(nn.Module):
 
 class RpnMultiHead(nn.Module):
 
-    def __init__(self, cfg, in_channels):
+    def __init__(self, cfg: Configuration, in_channels):
         super(RpnMultiHead, self).__init__()
 
         self.num_classes = cfg.num_classes

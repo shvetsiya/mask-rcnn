@@ -1,9 +1,30 @@
 import os, sys
 sys.path.append(os.path.dirname(__file__))
 
-from train_0 import *
+import numpy as np
 
-##--------------------------------------------------------------
+# torch libs
+import torch
+from torch.autograd import Variable
+from torch.nn.parallel.data_parallel import data_parallel
+from torch.utils.data import DataLoader
+from torch.utils.data.dataset import Dataset
+from torch.utils.data.sampler import SequentialSampler
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import torchvision.transforms as transforms
+
+from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH
+
+from utility.file import Logger
+from net.resnet50_mask_rcnn.configuration import Configuration
+from net.resnet50_mask_rcnn.draw import draw_multi_proposal_metric, draw_mask_metric
+from net.resnet50_mask_rcnn.model import MaskRcnnNet
+from net.metric import compute_average_precision_for_mask, compute_precision_for_box
+from dataset.reader import ScienceDataset, multi_mask_to_annotation, instance_to_multi_mask, \
+        multi_mask_to_contour_overlay, multi_mask_to_color_overlay
+from dataset.transform import pad_to_factor
 
 
 ## overwrite functions ###
@@ -76,7 +97,7 @@ def run_evaluate():
 
     out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
     initial_checkpoint = \
-        RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00016500_model.pth'
+        RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00008500_model.pth'
     ##
 
     ## setup  ---------------------------
@@ -84,7 +105,6 @@ def run_evaluate():
     os.makedirs(out_dir + '/evaluate/npys', exist_ok=True)
     os.makedirs(out_dir + '/checkpoint', exist_ok=True)
     os.makedirs(out_dir + '/backup', exist_ok=True)
-    backup_project_as_zip(PROJECT_PATH, out_dir + '/backup/code.%s.zip' % IDENTIFIER)
 
     log = Logger()
     log.open(out_dir + '/log.evaluate.txt', mode='a')
@@ -152,14 +172,14 @@ def run_evaluate():
         ##save results ---------------------------------------
         revert(net, images)
 
-        batch_size = len(indices)
-        assert (
-            batch_size == 1)  #note current version support batch_size==1 for variable size input
-        #to use batch_size>1, need to fix code for net.windows, etc
-
         batch_size, C, H, W = inputs.size()
+
+        # NOTE: Current version support batch_size==1 for variable size input. To use batch_size>1,
+        # need to fix code for net.windows, etc.
+        assert (batch_size == 1)
+
         inputs = inputs.data.cpu().numpy()
-        #
+
         # window          = net.rpn_window
         # rpn_logits_flat = net.rpn_logits_flat.data.cpu().numpy()
         # rpn_deltas_flat = net.rpn_deltas_flat.data.cpu().numpy()
@@ -181,7 +201,6 @@ def run_evaluate():
             truth_box = truth_boxes[b]
             truth_label = truth_labels[b]
             truth_instance = truth_instances[b]
-
 
             mask_average_precision, mask_precision =\
                 compute_average_precision_for_mask(mask, truth_mask, t_range=np.arange(0.5, 1.0, 0.05))
@@ -212,10 +231,10 @@ def run_evaluate():
             #image_show('overlay_mask',overlay_mask)
             #image_show('overlay_truth',overlay_truth)
             #image_show('overlay_error',overlay_error)
-            image_show('all1', all1)
-            image_show('all6', all6)
-            image_show('all7', all7)
-            cv2.waitKey(0)
+            # image_show('all1', all1)
+            # image_show('all6', all6)
+            # image_show('all7', all7)
+            # cv2.waitKey(0)
 
         # print statistics  ------------
         test_acc += 0  #batch_size*acc[0][0]
