@@ -122,7 +122,6 @@ def draw_multi_proposal_metric(cfg,
     precision = 0
 
     if len(proposal) > 0 and len(truth_box) > 0:
-
         thresholds = [
             0.5,
         ]
@@ -131,38 +130,35 @@ def draw_multi_proposal_metric(cfg,
         precisions, recalls, results, truth_results = \
             compute_precision_for_box(box, truth_box, truth_label, thresholds)
 
-        #for precision, recall, result, truth_result, threshold in zip(precisions, recalls, results, truth_results, thresholds):
+        precision, recall, result, truth_result, threshold = \
+            precisions[0], recalls[0], results[0], truth_results[0], thresholds[0]
 
-        if 1:
-            precision, recall, result, truth_result, threshold = \
-                precisions[0], recalls[0], results[0], truth_results[0], thresholds[0]
+        for i, b in enumerate(truth_box):
+            x0, y0, x1, y1 = b.astype(np.int32)
 
-            for i, b in enumerate(truth_box):
-                x0, y0, x1, y1 = b.astype(np.int32)
+            if truth_result[i] == HIT:
+                cv2.rectangle(image_truth, (x0, y0), (x1, y1), color0, thickness)
+                draw_screen_rect(image_hit, (x0, y0), (x1, y1), color2, 0.25)
 
-                if truth_result[i] == HIT:
-                    cv2.rectangle(image_truth, (x0, y0), (x1, y1), color0, thickness)
-                    draw_screen_rect(image_hit, (x0, y0), (x1, y1), color2, 0.25)
+            if truth_result[i] == MISS:
+                cv2.rectangle(image_truth, (x0, y0), (x1, y1), color0, thickness)
+                cv2.rectangle(image_miss, (x0, y0), (x1, y1), color0, thickness)
 
-                if truth_result[i] == MISS:
-                    cv2.rectangle(image_truth, (x0, y0), (x1, y1), color0, thickness)
-                    cv2.rectangle(image_miss, (x0, y0), (x1, y1), color0, thickness)
+            if truth_result[i] == INVALID:
+                draw_screen_rect(image_invalid, (x0, y0), (x1, y1), (255, 255, 255), 0.5)
 
-                if truth_result[i] == INVALID:
-                    draw_screen_rect(image_invalid, (x0, y0), (x1, y1), (255, 255, 255), 0.5)
+        for i, b in enumerate(box):
+            x0, y0, x1, y1 = b.astype(np.int32)
+            cv2.rectangle(image_proposal, (x0, y0), (x1, y1), color1, thickness)
 
-            for i, b in enumerate(box):
-                x0, y0, x1, y1 = b.astype(np.int32)
-                cv2.rectangle(image_proposal, (x0, y0), (x1, y1), color1, thickness)
+            if result[i] == TP:
+                cv2.rectangle(image_hit, (x0, y0), (x1, y1), color2, thickness)
 
-                if result[i] == TP:
-                    cv2.rectangle(image_hit, (x0, y0), (x1, y1), color2, thickness)
+            if result[i] == FP:
+                cv2.rectangle(image_fp, (x0, y0), (x1, y1), color1, thickness)  #255,0,255
 
-                if result[i] == FP:
-                    cv2.rectangle(image_fp, (x0, y0), (x1, y1), color1, thickness)  #255,0,255
-
-                if result[i] == INVALID:
-                    cv2.rectangle(image_invalid, (x0, y0), (x1, y1), (255, 255, 255), thickness)
+            if result[i] == INVALID:
+                cv2.rectangle(image_invalid, (x0, y0), (x1, y1), (255, 255, 255), thickness)
 
     draw_shadow_text(image_truth, 'truth', (5, 15), 0.5, (255, 255, 255), 1)
     draw_shadow_text(image_proposal, 'proposal', (5, 15), 0.5, (255, 255, 255), 1)

@@ -110,7 +110,11 @@ def evaluate(net, test_loader):
 #--------------------------------------------------------------
 def run_train():
     out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
+<<<<<<< HEAD
     initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00022500_model.pth'
+=======
+    initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
+>>>>>>> 56c15d8dddfc4e812b7c44c5498b81bec17acb35
     ##
 
     pretrain_file = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00022500_model.pth'
@@ -383,7 +387,7 @@ def run_train():
             j = j + 1
 
             #<debug> ===================================================================
-            if 1:
+            if 0:
                 #if i%10==0:
 
                 net.set_mode('test')

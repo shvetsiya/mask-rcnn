@@ -123,7 +123,6 @@ INVALID = -1
 
 
 def compute_precision_for_box(box, truth_box, truth_label, threshold=[0.5]):
-
     num_truth_box = len(truth_box)
     num_box = len(box)
 

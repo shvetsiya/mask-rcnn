@@ -2,6 +2,7 @@ import os, sys
 sys.path.append(os.path.dirname(__file__))
 
 from train import *
+<<<<<<< HEAD
 
 ALL_TEST_IMAGE_ID = [
     '0114f484a16c152baa2d82fdd43740880a762c93f436c8988ac461c5c9dbe7d5',
@@ -70,6 +71,9 @@ ALL_TEST_IMAGE_ID = [
     'fac507fa4d1649e8b24c195d990f1fc3ca3633d917839e1751a9d412a14ab5e3',
     'fe9adb627a6f45747c5a8223b671774791ededf9364f6544be487c540107fa4f',
 ]
+=======
+from common import ALL_TEST_IMAGE_ID
+>>>>>>> 56c15d8dddfc4e812b7c44c5498b81bec17acb35
 
 
 ## overwrite functions ###
@@ -136,14 +140,23 @@ def submit_collate(batch):
 def run_submit():
 
     out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
+<<<<<<< HEAD
     initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00017500_model.pth'  #00016500_model.pth'
+=======
+    initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00008500_model.pth'
+>>>>>>> 56c15d8dddfc4e812b7c44c5498b81bec17acb35
 
     ## setup  ---------------------------
     os.makedirs(out_dir + '/submit/overlays', exist_ok=True)
     os.makedirs(out_dir + '/submit/npys', exist_ok=True)
     os.makedirs(out_dir + '/checkpoint', exist_ok=True)
+<<<<<<< HEAD
     #os.makedirs(out_dir + '/backup', exist_ok=True)
     #backup_project_as_zip(PROJECT_PATH, out_dir + '/backup/code.%s.zip' % IDENTIFIER)
+=======
+    os.makedirs(out_dir + '/backup', exist_ok=True)
+    backup_project_as_zip(PROJECT_PATH, out_dir + '/backup/code.%s.zip' % IDENTIFIER)
+>>>>>>> 56c15d8dddfc4e812b7c44c5498b81bec17acb35
 
     log = Logger()
     log.open(out_dir + '/log.evaluate.txt', mode='a')
@@ -195,7 +208,10 @@ def run_submit():
 
     test_num = len(test_loader.dataset)
     for i, (inputs, images, indices) in enumerate(test_loader, 0):
+<<<<<<< HEAD
 
+=======
+>>>>>>> 56c15d8dddfc4e812b7c44c5498b81bec17acb35
         print(
             '\rpredicting: %10d/%d (%0.0f %%)  %0.2f min' %
             (i, test_num - 1, 100 * i / (test_num - 1), (timer() - start) / 60),
@@ -302,7 +318,11 @@ def run_npy_to_sumbit_csv():
     submit_dir = '../results/mask-rcnn-50-gray500-02/submit'
 
     npy_dir = submit_dir + '/npys'
+<<<<<<< HEAD
     csv_file = submit_dir + '/submission17500.csv'
+=======
+    csv_file = submit_dir + '/submission-gray53-only.csv'
+>>>>>>> 56c15d8dddfc4e812b7c44c5498b81bec17acb35
 
     ## start -----------------------------
     all_num = 0

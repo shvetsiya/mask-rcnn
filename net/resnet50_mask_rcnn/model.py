@@ -2,7 +2,7 @@ from common import *
 from net.lib.roi_align_pool_tf.module import RoIAlign as Crop
 
 if __name__ == '__main__':
-    from configuration import *
+    from configuration import Configuration
     from layer.rpn_multi_nms import *
     from layer.rpn_multi_target import *
     from layer.rpn_multi_loss import *
@@ -14,7 +14,7 @@ if __name__ == '__main__':
     from layer.mask_loss import *
 
 else:
-    from .configuration import *
+    from .configuration import Configuration
     from .layer.rpn_multi_nms import *
     from .layer.rpn_multi_target import *
     from .layer.rpn_multi_loss import *
@@ -101,7 +101,7 @@ def make_layer_c(in_planes, planes, out_planes, num_blocks, stride):
 
 class FeatureNet(nn.Module):
 
-    def __init__(self, cfg, in_channels, out_channels=256):
+    def __init__(self, cfg: Configuration, in_channels, out_channels=256):
         super(FeatureNet, self).__init__()
         self.cfg = cfg
 
@@ -144,7 +144,7 @@ class FeatureNet(nn.Module):
 
 class RpnMultiHead(nn.Module):
 
-    def __init__(self, cfg, in_channels):
+    def __init__(self, cfg: Configuration, in_channels):
         super(RpnMultiHead, self).__init__()
 
         self.num_classes = cfg.num_classes
@@ -332,7 +332,7 @@ class MaskHead(nn.Module):
 
 class MaskRcnnNet(nn.Module):
 
-    def __init__(self, cfg):
+    def __init__(self, cfg: Configuration):
         super(MaskRcnnNet, self).__init__()
         self.version = 'net version \'mask-rcnn-resnet50-fpn\''
         self.cfg = cfg
