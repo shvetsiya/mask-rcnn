@@ -117,7 +117,6 @@ def run_train():
         None #RESULTS_DIR + '/mask-single-shot-dummy-1a/checkpoint/00028000_model.pth'
     skip = ['crop', 'mask']
 
-
     ## setup  -----------------
     os.makedirs(out_dir + '/checkpoint', exist_ok=True)
     os.makedirs(out_dir + '/train', exist_ok=True)
@@ -173,7 +172,7 @@ def run_train():
 
     start_iter = 0
     start_epoch = 0.
-    if 0:#initial_checkpoint is not None:
+    if 0:  #initial_checkpoint is not None:
         checkpoint = torch.load(initial_checkpoint.replace('_model.pth', '_optimizer.pth'))
         start_iter = checkpoint['iter']
         start_epoch = checkpoint['epoch']
