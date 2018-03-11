@@ -27,8 +27,12 @@ from dataset.reader import ScienceDataset, multi_mask_to_annotation, instance_to
 from dataset.transform import pad_to_factor
 
 
-## overwrite functions ###
-def revert(net, images):
+def revert(net: MaskRcnnNet, images: list):
+    """Adjusts the net results to original images sizes.
+
+    returns:
+        nothing
+    """
 
     def torch_clip_proposals(proposals, index, width, height):
         boxes = torch.stack((
@@ -42,34 +46,17 @@ def revert(net, images):
         ), 1)
         return proposals
 
-    # ----
-
     batch_size = len(images)
-    for b in range(batch_size):
-        image = images[b]
+    for index_in_batch in range(batch_size):
+        image = images[index_in_batch]
         height, width = image.shape[:2]
 
-        # net.rpn_logits_flat  <todo>
-        # net.rpn_deltas_flat  <todo>
-        # net.rpn_window       <todo>
-        # net.rpn_proposals    <todo>
-
-        # net.rcnn_logits
-        # net.rcnn_deltas
-        # net.rcnn_proposals <todo>
-
-        # mask --
-        # net.mask_logits
-        index = (net.detections[:, 0] == b).nonzero().view(-1)
+        index = (net.detections[:, 0] == index_in_batch).nonzero().view(-1)
         net.detections = torch_clip_proposals(net.detections, index, width, height)
-
-        net.masks[b] = net.masks[b][:height, :width]
-
-    return net, image
+        net.masks[index_in_batch] = net.masks[index_in_batch][:height, :width]
 
 
 def eval_augment(image, multi_mask, meta, index):
-
     pad_image = pad_to_factor(image, factor=16)
     input = torch.from_numpy(pad_image.transpose((2, 0, 1))).float().div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask)
@@ -78,16 +65,15 @@ def eval_augment(image, multi_mask, meta, index):
 
 
 def eval_collate(batch):
-
     batch_size = len(batch)
-    #for b in range(batch_size): print (batch[b][0].size())
-    inputs = torch.stack([batch[b][0] for b in range(batch_size)], 0)
-    boxes = [batch[b][1] for b in range(batch_size)]
-    labels = [batch[b][2] for b in range(batch_size)]
-    instances = [batch[b][3] for b in range(batch_size)]
-    metas = [batch[b][4] for b in range(batch_size)]
-    images = [batch[b][5] for b in range(batch_size)]
-    indices = [batch[b][6] for b in range(batch_size)]
+    #for index_in_batch in range(batch_size): print (batch[index_in_batch][0].size())
+    inputs = torch.stack([batch[index_in_batch][0] for index_in_batch in range(batch_size)], 0)
+    boxes = [batch[index_in_batch][1] for index_in_batch in range(batch_size)]
+    labels = [batch[index_in_batch][2] for index_in_batch in range(batch_size)]
+    instances = [batch[index_in_batch][3] for index_in_batch in range(batch_size)]
+    metas = [batch[index_in_batch][4] for index_in_batch in range(batch_size)]
+    images = [batch[index_in_batch][5] for index_in_batch in range(batch_size)]
+    indices = [batch[index_in_batch][6] for index_in_batch in range(batch_size)]
 
     return [inputs, boxes, labels, instances, metas, images, indices]
 
@@ -187,20 +173,20 @@ def run_evaluate():
         masks = net.masks
         detections = net.detections.cpu().numpy()
 
-        for b in range(batch_size):
-            #image0 = (inputs[b].transpose((1,2,0))*255).astype(np.uint8)
-            image = images[b]
+        for index_in_batch in range(batch_size):
+            #image0 = (inputs[index_in_batch].transpose((1,2,0))*255).astype(np.uint8)
+            image = images[index_in_batch]
             height, width = image.shape[:2]
-            mask = masks[b]
+            mask = masks[index_in_batch]
 
-            index = np.where(detections[:, 0] == b)[0]
+            index = np.where(detections[:, 0] == index_in_batch)[0]
             detection = detections[index]
             box = detection[:, 1:5]
 
-            truth_mask = instance_to_multi_mask(truth_instances[b])
-            truth_box = truth_boxes[b]
-            truth_label = truth_labels[b]
-            truth_instance = truth_instances[b]
+            truth_mask = instance_to_multi_mask(truth_instances[index_in_batch])
+            truth_box = truth_boxes[index_in_batch]
+            truth_label = truth_labels[index_in_batch]
+            truth_instance = truth_instances[index_in_batch]
 
             mask_average_precision, mask_precision =\
                 compute_average_precision_for_mask(mask, truth_mask, t_range=np.arange(0.5, 1.0, 0.05))
@@ -213,7 +199,7 @@ def run_evaluate():
             box_precisions_50.append(box_precision)
 
             # --------------------------------------------
-            id = test_dataset.ids[indices[b]]
+            id = test_dataset.ids[indices[index_in_batch]]
             name = id.split('/')[-1]
             print('%d\t%s\t%0.5f  (%0.5f)' % (i, name, mask_average_precision, box_precision))
 
