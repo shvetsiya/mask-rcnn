@@ -2,6 +2,7 @@ import os, sys
 sys.path.append(os.path.dirname(__file__))
 
 import numpy as np
+import pandas as pd
 import cv2
 
 # torch libs
@@ -17,12 +18,13 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 
 from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH
+import matplotlib.pyplot as plt
 
 from utility.file import Logger
 from net.resnet50_mask_rcnn.configuration import Configuration
 from net.resnet50_mask_rcnn.draw import draw_multi_proposal_metric, draw_mask_metric, image_show
 from net.resnet50_mask_rcnn.model import MaskRcnnNet
-from net.metric import compute_average_precision_for_mask, compute_precision_for_box
+from net.metric import compute_average_precision_for_mask, compute_precision_for_box, HIT
 from dataset.reader import ScienceDataset, multi_mask_to_annotation, instance_to_multi_mask, \
         multi_mask_to_contour_overlay, multi_mask_to_color_overlay
 from dataset.transform import pad_to_factor
@@ -33,10 +35,12 @@ class Evaluator(object):
     def __init__(self):
         self.OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
         self.OVERLAYS_DIR = self.OUT_DIR + '/evaluate/overlays'
+        self.STATS_DIR = self.OUT_DIR + '/evaluate/stats'
         self.logger = Logger()
 
         ## setup  ---------------------------
         os.makedirs(self.OVERLAYS_DIR, exist_ok=True)
+        os.makedirs(self.STATS_DIR, exist_ok=True)
         os.makedirs(self.OUT_DIR + '/evaluate/npys', exist_ok=True)
         os.makedirs(self.OUT_DIR + '/checkpoint', exist_ok=True)
         os.makedirs(self.OUT_DIR + '/backup', exist_ok=True)
@@ -54,7 +58,7 @@ class Evaluator(object):
         logger.write('** dataset setting **\n')
 
         self.test_dataset = ScienceDataset(
-            #'train1_ids_gray2_500', mode='train',
+            # 'train1_ids_gray2_500',
             'valid1_ids_gray2_43',
             mode='train',
             #'debug1_ids_gray2_10', mode='train',
@@ -138,10 +142,45 @@ class Evaluator(object):
         cv2.imwrite('{}/{}_all6.png'.format(self.OVERLAYS_DIR, name), all6)
         cv2.imwrite('{}/{}_all7.png'.format(self.OVERLAYS_DIR, name), all7)
 
+    def _append_hit_and_miss_stats(self, name: str, truth_boxes, truth_box_results, thresholds,
+                                   bb_results: pd.DataFrame):
+        """Checks which ground thruth boxes are hit and which are missed for each threshold level.
+        Populates results dataframe.
+
+        Args:
+            truth_boxes: an array of ground truth boxes.
+            thruth_box_results: an list of results for each threshold. Each result is an array of
+                truth_boxes length. Each element of the array is whether HIT or not.
+            thresholds: threshold levels for IoU.
+            bb_results: bounding boxes results.
+        """
+        for threshold_index, threshold in enumerate(thresholds):
+            for box, result in zip(truth_boxes, truth_box_results[threshold_index]):
+                x0, y0, x1, y1 = box.astype(np.int32)
+                w, h = (x1 - x0, y1 - y0)
+                bb_results.loc[bb_results.shape[0]] = {
+                    'id': name,
+                    'w': w,
+                    'h': h,
+                    'threshold': threshold,
+                    'is_hit': result == HIT
+                }
+
     def run_evaluate(self, model_checkpoint):
         self.cfg = Configuration()
 
         logger = self.logger
+        thresholds = [0.5, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+
+        # TODO(alexander): Populate this.
+        overall_results_columns = ['id']
+        for threshold in thresholds:
+            overall_results_columns.append('box_precision_{}'.format(int(threshold * 100)))
+        for threshold in thresholds:
+            overall_results_columns.append('mask_precision_{}'.format(int(threshold * 100)))
+        overall_results = pd.DataFrame(columns=overall_results_columns)
+
+        bb_results = pd.DataFrame(columns=['id', 'w', 'h', 'threshold', 'is_hit'])
 
         logger.write('\tmodel checkpoint = %s\n' % model_checkpoint)
         net = MaskRcnnNet(self.cfg).cuda()
@@ -153,6 +192,12 @@ class Evaluator(object):
         logger.write('index | id | mask_average_precision (box_precision)\n')
         mask_average_precisions = []
         box_precisions_50 = []
+
+        hit_box_sizes = dict()
+        missed_box_sizes = dict()
+        for threshold in thresholds:
+            hit_box_sizes[threshold] = []
+            missed_box_sizes[threshold] = []
 
         test_num = 0
         for inputs, truth_boxes, truth_labels, truth_instances, metas, images, indices in self.test_loader:
@@ -192,10 +237,10 @@ class Evaluator(object):
                 truth_instance = truth_instances[index_in_batch]
 
                 mask_average_precision, mask_precision = compute_average_precision_for_mask(
-                    mask, truth_mask, t_range=np.arange(0.5, 1.0, 0.05))
+                    mask, truth_mask, t_range=thresholds)
 
                 box_precision, box_recall, box_result, truth_box_result = \
-                    compute_precision_for_box(box, truth_box, truth_label, threshold=[0.5])
+                    compute_precision_for_box(box, truth_box, truth_label, thresholds)
                 box_precision = box_precision[0]
 
                 mask_average_precisions.append(mask_average_precision)
@@ -203,6 +248,9 @@ class Evaluator(object):
 
                 id = self.test_dataset.ids[indices[index_in_batch]]
                 name = id.split('/')[-1]
+
+                self._append_hit_and_miss_stats(name, truth_box, truth_box_result, thresholds,
+                                                bb_results)
                 self._save_prediction_png(
                     name,
                     mask=mask,
@@ -214,6 +262,16 @@ class Evaluator(object):
 
                 print('%d\t%s\t%0.5f  (%0.5f)' % (test_num, name, mask_average_precision,
                                                   box_precision))
+
+        for threshold in thresholds:
+            hit_results = bb_results[(bb_results.is_hit == True) &
+                                     (bb_results.threshold == threshold)]
+            miss_results = bb_results[(bb_results.is_hit == False) &
+                                      (bb_results.threshold == threshold)]
+            plt.plot(hit_results.w, hit_results.h, 'bo', miss_results.w, miss_results.h, 'ro')
+            plt.savefig('{}/hits_and_misses_{}.png'.format(self.STATS_DIR, int(threshold * 100)))
+
+        bb_results.to_csv(self.STATS_DIR + '/bb_results.csv')
 
         mask_average_precisions = np.array(mask_average_precisions)
         box_precisions_50 = np.array(box_precisions_50)
@@ -229,5 +287,3 @@ if __name__ == '__main__':
     model_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00008500_model.pth'
     evaluator = Evaluator()
     evaluator.run_evaluate(model_checkpoint)
-
-    print('\nsucess!')
