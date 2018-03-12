@@ -1,8 +1,28 @@
 import os, sys
 sys.path.append(os.path.dirname(__file__))
 
-from train import *
-from common import ALL_TEST_IMAGE_ID
+import numpy as np
+import pandas as pd
+import cv2
+import glob
+import time
+from timeit import default_timer as timer
+
+# torch libs
+import torch
+from torch.autograd import Variable
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import SequentialSampler
+
+from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH, ALL_TEST_IMAGE_ID
+
+from utility.file import Logger
+from net.resnet50_mask_rcnn.configuration import Configuration
+from net.resnet50_mask_rcnn.model import MaskRcnnNet
+from net.metric import run_length_encode
+from dataset.reader import ScienceDataset, multi_mask_to_contour_overlay, \
+        multi_mask_to_color_overlay
+from dataset.transform import pad_to_factor
 
 
 ## overwrite functions ###
@@ -69,14 +89,13 @@ def submit_collate(batch):
 def run_submit():
 
     out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
-    initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00008500_model.pth'
+    initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
 
     ## setup  ---------------------------
     os.makedirs(out_dir + '/submit/overlays', exist_ok=True)
     os.makedirs(out_dir + '/submit/npys', exist_ok=True)
     os.makedirs(out_dir + '/checkpoint', exist_ok=True)
     os.makedirs(out_dir + '/backup', exist_ok=True)
-    backup_project_as_zip(PROJECT_PATH, out_dir + '/backup/code.%s.zip' % IDENTIFIER)
 
     log = Logger()
     log.open(out_dir + '/log.evaluate.txt', mode='a')
