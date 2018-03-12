@@ -95,7 +95,6 @@ def run_submit():
     os.makedirs(out_dir + '/submit/overlays', exist_ok=True)
     os.makedirs(out_dir + '/submit/npys', exist_ok=True)
     os.makedirs(out_dir + '/checkpoint', exist_ok=True)
-    os.makedirs(out_dir + '/backup', exist_ok=True)
 
     log = Logger()
     log.open(out_dir + '/log.evaluate.txt', mode='a')

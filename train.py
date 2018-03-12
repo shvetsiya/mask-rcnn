@@ -17,20 +17,20 @@ import torchvision.transforms as transforms
 
 from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH
 
-from utility.file import Logger, backup_project_as_zip, time_to_str
+from utility.file import Logger, time_to_str
 from net.rate import get_learning_rate
 from net.resnet50_mask_rcnn.configuration import Configuration
 from net.resnet50_mask_rcnn.model import MaskRcnnNet
 from dataset.reader import ScienceDataset, multi_mask_to_annotation
-from dataset.transform import random_shift_scale_rotate_transform2, random_crop_transform2, \
-        random_horizontal_flip_transform2, random_vertical_flip_transform2, \
-        random_rotate90_transform2, fix_crop_transform2
+
+import dataset.transform as tr
+
 
 WIDTH, HEIGHT = 256, 256
 
 
 def train_augment(image, multi_mask, meta, index):
-    image, multi_mask = random_shift_scale_rotate_transform2(
+    image, multi_mask = tr.random_shift_scale_rotate_transform2(
         image,
         multi_mask,
         shift_limit=[0, 0],
@@ -39,10 +39,10 @@ def train_augment(image, multi_mask, meta, index):
         borderMode=cv2.BORDER_REFLECT_101,
         u=0.5)  #borderMode=cv2.BORDER_CONSTANT
 
-    image, multi_mask = random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=1.0)
-    image, multi_mask = random_horizontal_flip_transform2(image, multi_mask, 0.5)
-    image, multi_mask = random_vertical_flip_transform2(image, multi_mask, 0.5)
-    image, multi_mask = random_rotate90_transform2(image, multi_mask, 0.5)
+    image, multi_mask = tr.random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=1.0)
+    image, multi_mask = tr.random_horizontal_flip_transform2(image, multi_mask, 0.5)
+    image, multi_mask = tr.random_vertical_flip_transform2(image, multi_mask, 0.5)
+    image, multi_mask = tr.random_rotate90_transform2(image, multi_mask, 0.5)
 
     input = torch.from_numpy(image.transpose((2, 0, 1))).float().div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask)
@@ -51,7 +51,7 @@ def train_augment(image, multi_mask, meta, index):
 
 
 def valid_augment(image, multi_mask, meta, index):
-    image, multi_mask = fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
+    image, multi_mask = tr.fix_crop_transform2(image, multi_mask, -1, -1, WIDTH, HEIGHT)
 
     input = torch.from_numpy(image.transpose((2, 0, 1))).float().div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask)
@@ -102,15 +102,13 @@ def run_train():
     initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
     ##
 
-    pretrain_file = \
-        None #RESULTS_DIR + '/mask-single-shot-dummy-1a/checkpoint/00028000_model.pth'
+    pretrain_file = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
+        #None #RESULTS_DIR + '/mask-single-shot-dummy-1a/checkpoint/00028000_model.pth'
     skip = ['crop', 'mask']
 
     ## setup  -----------------
     os.makedirs(out_dir + '/checkpoint', exist_ok=True)
-    os.makedirs(out_dir + '/train', exist_ok=True)
-    os.makedirs(out_dir + '/backup', exist_ok=True)
-    backup_project_as_zip(PROJECT_PATH, out_dir + '/backup/code.train.%s.zip' % IDENTIFIER)
+    os.makedirs(out_dir + '/train', exist_ok=True)    
 
     log = Logger()
     log.open(out_dir + '/log.train.txt', mode='a')

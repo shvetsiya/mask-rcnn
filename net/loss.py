@@ -1,5 +1,7 @@
-from common import *
-
+import torch
+from torch.autograd import Variable
+import torch.nn as nn
+import torch.nn.functional as F
 
 #  https://github.com/bermanmaxim/jaccardSegment/blob/master/losses.py
 #  https://discuss.pytorch.org/t/solved-what-is-the-correct-way-to-implement-custom-loss-function/3568/4
