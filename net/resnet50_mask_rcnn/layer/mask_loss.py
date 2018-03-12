@@ -1,4 +1,6 @@
-from common import *
+import os
+import torch
+from torch.autograd import Variable
 
 
 def weighted_binary_cross_entropy_with_logits(logits, labels, weights):

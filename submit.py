@@ -220,7 +220,7 @@ def shrink_by_one(multi_mask):
 
     num = int(multi_mask.max())
     for m in range(num):
-        mask = multi_mask == m + 1
+        mask = (multi_mask == m + 1)
         contour = mask_to_inner_contour(mask)
         thresh = thresh & (~contour)
         multi_mask1[thresh] = m + 1

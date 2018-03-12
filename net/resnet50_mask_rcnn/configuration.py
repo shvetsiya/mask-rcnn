@@ -34,20 +34,17 @@ class Configuration(object):
         # ]
         self.rpn_base_apsect_ratios = [
             [(1, 1)],
-            [
-                (1, 1),
-                aspect(2**0.5, 2),
-                aspect(2**0.5, 0.5),
+            [(1, 1),
+             aspect(2**0.5, 2),
+             aspect(2**0.5, 0.5),
             ],
-            [
-                (1, 1),
-                aspect(2**0.5, 2),
-                aspect(2**0.5, 0.5),
+            [(1, 1),
+             aspect(2**0.5, 2),
+             aspect(2**0.5, 0.5),
             ],
-            [
-                (1, 1),
-                aspect(2**0.5, 2),
-                aspect(2**0.5, 0.5),
+            [(1, 1),
+             aspect(2**0.5, 2),
+             aspect(2**0.5, 0.5),
             ],
         ]
 
