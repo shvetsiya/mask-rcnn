@@ -215,9 +215,8 @@ class Evaluator(object):
             with torch.no_grad():
                 inputs = Variable(inputs).cuda()
                 net(inputs, truth_boxes, truth_labels, truth_instances)
-
-            # Resize results to original images shapes.
-            self._revert(net, images)
+                # Resize results to original images shapes.
+                self._revert(net, images)
 
             batch_size = inputs.size()[0]
             # NOTE: Current version support batch_size==1 for variable size input. To use

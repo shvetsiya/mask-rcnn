@@ -25,9 +25,9 @@ from dataset.reader import ScienceDataset, multi_mask_to_contour_overlay, \
 from dataset.transform import pad_to_factor
 
 
-## overwrite functions ###
-def revert(net, images):
-    #undo test-time-augmentation (e.g. unpad or scale back to input image size, etc)
+def _revert(net, images):
+    """Reverts test-time-augmentation (e.g., unpad, scale back to input image size, etc).
+    """
 
     def torch_clip_proposals(proposals, index, width, height):
         boxes = torch.stack((
@@ -41,43 +41,25 @@ def revert(net, images):
         ), 1)
         return proposals
 
-    # ----
-
     batch_size = len(images)
     for b in range(batch_size):
         image = images[b]
         height, width = image.shape[:2]
 
-        # net.rpn_logits_flat  <todo>
-        # net.rpn_deltas_flat  <todo>
-        # net.rpn_window       <todo>
-        # net.rpn_proposals    <todo>
-
-        # net.rcnn_logits
-        # net.rcnn_deltas
-        # net.rcnn_proposals <todo>
-
-        # mask --
-        # net.mask_logits
         index = (net.detections[:, 0] == b).nonzero().view(-1)
         net.detections = torch_clip_proposals(net.detections, index, width, height)
 
         net.masks[b] = net.masks[b][:height, :width]
 
-    return net, image
 
-
-#-----------------------------------------------------------------------------------
-def submit_augment(image, index):
+def _submit_augment(image, index):
     pad_image = pad_to_factor(image, factor=16)
     input = torch.from_numpy(pad_image.transpose((2, 0, 1))).float().div(255)
     return input, image, index
 
 
-def submit_collate(batch):
-
+def _submit_collate(batch):
     batch_size = len(batch)
-    #for b in range(batch_size): print (batch[b][0].size())
     inputs = torch.stack([batch[b][0] for b in range(batch_size)], 0)
     images = [batch[b][1] for b in range(batch_size)]
     indices = [batch[b][2] for b in range(batch_size)]
@@ -85,27 +67,23 @@ def submit_collate(batch):
     return [inputs, images, indices]
 
 
-#--------------------------------------------------------------
 def run_submit():
-
-    out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
+    OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
     initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
 
-    ## setup  ---------------------------
-    os.makedirs(out_dir + '/submit/overlays', exist_ok=True)
-    os.makedirs(out_dir + '/submit/npys', exist_ok=True)
-    os.makedirs(out_dir + '/checkpoint', exist_ok=True)
+    os.makedirs(OUT_DIR + '/submit/overlays', exist_ok=True)
+    os.makedirs(OUT_DIR + '/submit/npys', exist_ok=True)
+    os.makedirs(OUT_DIR + '/checkpoint', exist_ok=True)
 
     log = Logger()
-    log.open(out_dir + '/log.evaluate.txt', mode='a')
+    log.open(OUT_DIR + '/log.evaluate.txt', mode='a')
     log.write('\n--- [START %s] %s\n\n' % (IDENTIFIER, '-' * 64))
     log.write('** some experiment setting **\n')
     log.write('\tSEED         = %u\n' % SEED)
     log.write('\tPROJECT_PATH = %s\n' % PROJECT_PATH)
-    log.write('\tout_dir      = %s\n' % out_dir)
+    log.write('\tout_dir      = %s\n' % OUT_DIR)
     log.write('\n')
 
-    ## net ------------------------------
     cfg = Configuration()
     net = MaskRcnnNet(cfg).cuda()
 
@@ -117,16 +95,15 @@ def run_submit():
     log.write('%s\n\n' % (type(net)))
     log.write('\n')
 
-    ## dataset ----------------------------------------
     log.write('** dataset setting **\n')
 
     test_dataset = ScienceDataset(
-        #'train1_ids_gray_only1_500', mode='test',
-        #'valid1_ids_gray_only1_43', mode='test',
-        #'debug1_ids_gray_only_10', mode='test',
+        #'train1_ids_gray_only1_500',
+        #'valid1_ids_gray_only1_43',
+        #'debug1_ids_gray_only_10',
         'test1_ids_gray_only_65.txt',
         mode='test',
-        transform=submit_augment)
+        transform=_submit_augment)
     test_loader = DataLoader(
         test_dataset,
         sampler=SequentialSampler(test_dataset),
@@ -134,7 +111,7 @@ def run_submit():
         drop_last=False,
         num_workers=4,
         pin_memory=True,
-        collate_fn=submit_collate)
+        collate_fn=_submit_collate)
 
     log.write('\ttest_dataset.split = %s\n' % (test_dataset.split))
     log.write('\tlen(test_dataset)  = %d\n' % (len(test_dataset)))
@@ -157,15 +134,14 @@ def run_submit():
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
             net(inputs)
-            revert(net, images)  #unpad, undo test-time augment etc ....
+            # Resize results to original images shapes.
+            _revert(net, images)
 
-        ##save results ---------------------------------------
-        batch_size = len(indices)
-        assert (
-            batch_size == 1)  #note current version support batch_size==1 for variable size input
-        #to use batch_size>1, need to fix code for net.windows, etc
+        batch_size = inputs.size()[0]
+        # NOTE: Current version support batch_size==1 for variable size input. To use
+        # batch_size > 1, need to fix code for net.windows, etc.
+        assert (batch_size == 1)
 
-        batch_size, C, H, W = inputs.size()
         inputs = inputs.data.cpu().numpy()
 
         window = net.rpn_window
@@ -175,7 +151,6 @@ def run_submit():
         masks = net.masks
 
         for b in range(batch_size):
-            #image0 = (inputs[b].transpose((1,2,0))*255).astype(np.uint8)
             image = images[b]
             mask = masks[b]
 
@@ -190,19 +165,13 @@ def run_submit():
             id = test_dataset.ids[indices[b]]
             name = id.split('/')[-1]
 
-            #draw_shadow_text(overlay_mask, 'mask',  (5,15),0.5, (255,255,255), 1)
-            np.save(out_dir + '/submit/npys/%s.npy' % (name), mask)
-            #cv2.imwrite(out_dir +'/submit/npys/%s.png'%(name),color_overlay)
-            cv2.imwrite(out_dir + '/submit/overlays/%s.png' % (name), all)
+            np.save(OUT_DIR + '/submit/npys/%s.npy' % (name), mask)
+            cv2.imwrite(OUT_DIR + '/submit/overlays/%s.png' % (name), all)
 
-            #psd
-            os.makedirs(out_dir + '/submit/psds/%s' % name, exist_ok=True)
-            cv2.imwrite(out_dir + '/submit/psds/%s/%s.png' % (name, name), image)
-            cv2.imwrite(out_dir + '/submit/psds/%s/%s.mask.png' % (name, name), color_overlay)
-            cv2.imwrite(out_dir + '/submit/psds/%s/%s.contour.png' % (name, name), contour_overlay)
-
-            #image_show('all',all)
-            #cv2.waitKey(1)
+            os.makedirs(OUT_DIR + '/submit/psds/%s' % name, exist_ok=True)
+            cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.png' % (name, name), image)
+            cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.mask.png' % (name, name), color_overlay)
+            cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.contour.png' % (name, name), contour_overlay)
 
     assert (test_num == len(test_loader.sampler))
 
@@ -211,10 +180,6 @@ def run_submit():
     log.write('\n')
 
 
-##-----------------------------------------------------------------------------------------------------
-
-
-## post process #######################################################################################
 def filter_small(multi_mask, threshold):
     num_masks = int(multi_mask.max())
 
