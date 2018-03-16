@@ -1,6 +1,7 @@
-from common import *
+import os
+import numpy as np
+import cv2
 import matplotlib.cm
-
 
 # draw -----------------------------------
 def image_show(name, image, resize=1):
