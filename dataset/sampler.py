@@ -1,9 +1,4 @@
-from common import *
-
-# common tool for dataset
-
-#sampler -----------------------------------------------
-
+from torch.utils.data.sampler import Sampler
 
 class ConstantSampler(Sampler):
 
