@@ -1,14 +1,14 @@
-from common import *
-
-
+#from common import *
+import os
+import random
+import math
+import cv2
+import numpy as np
+import skimage.morphology
 ## for debug
 def dummy_transform(image):
     print('\tdummy_transform')
     return image
-
-
-# kaggle science bowl-2 : ################################################################
-
 
 def resize_to_factor2(image, mask, factor=16):
 
@@ -110,7 +110,8 @@ def relabel_multi_mask(multi_mask):
     multi_mask = np.zeros((H, W), np.int32)
     for color in unique_color:
         #print(color)
-        if color == (0,): continue
+        if color == (0,):
+            continue
 
         mask = (data == color).all(axis=2)
         label = skimage.morphology.label(mask)
@@ -141,8 +142,8 @@ def random_shift_scale_rotate_transform2(image,
         dx = round(random.uniform(shift_limit[0], shift_limit[1]) * width)
         dy = round(random.uniform(shift_limit[0], shift_limit[1]) * height)
 
-        cc = math.cos(angle / 180 * math.pi) * (sx)
-        ss = math.sin(angle / 180 * math.pi) * (sy)
+        cc = math.cos(angle / 180 * math.pi) * sx
+        ss = math.sin(angle / 180 * math.pi) * sy
         rotate_matrix = np.array([[cc, -ss], [ss, cc]])
 
         box0 = np.array([
@@ -167,20 +168,20 @@ def random_shift_scale_rotate_transform2(image,
                 0,
                 0,
                 0,
-            ))  #cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
+            ))  # cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
 
         mask = mask.astype(np.float32)
         mask = cv2.warpPerspective(
             mask,
             mat,
             (width, height),
-            flags=cv2.INTER_NEAREST,  #cv2.INTER_LINEAR
+            flags=cv2.INTER_NEAREST,  # cv2.INTER_LINEAR
             borderMode=borderMode,
             borderValue=(
                 0,
                 0,
                 0,
-            ))  #cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
+            ))  # cv2.BORDER_CONSTANT, borderValue = (0, 0, 0))  #cv2.BORDER_REFLECT_101
         mask = mask.astype(np.int32)
         mask = relabel_multi_mask(mask)
 
@@ -190,7 +191,7 @@ def random_shift_scale_rotate_transform2(image,
 # single image ########################################################
 
 
-#agumentation (photometric) ----------------------
+# agumentation (photometric) ----------------------
 def random_brightness_shift_transform(image, limit=[16, 64], u=0.5):
     if np.random.random() < u:
         alpha = np.random.uniform(limit[0], limit[1])
