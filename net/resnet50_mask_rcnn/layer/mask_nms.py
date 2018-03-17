@@ -12,7 +12,7 @@ def make_empty_masks(inputs):
     return masks
 
 
-def mask_nms(cfg, mode, inputs, proposals, mask_logits):
+def mask_nms(cfg, dummy_mode, inputs, proposals, mask_logits):
     overlap_threshold = cfg.mask_test_nms_overlap_threshold
     pre_score_threshold = cfg.mask_test_nms_pre_score_threshold
     mask_threshold = cfg.mask_test_mask_threshold
@@ -52,18 +52,18 @@ def mask_nms(cfg, mode, inputs, proposals, mask_logits):
         instances = np.array(instances, np.bool)
         boxes = np.array(boxes, np.float32)
 
-        #compute overlap
-        box_overlap = cython_box_overlap(boxes, boxes)
+        # Compute overlap
+        boxes_overlap = cython_box_overlap(boxes, boxes)
 
         boxes_num = len(boxes_indices)
         instance_overlap = np.zeros((boxes_num, boxes_num), np.float32)
         for first_index in range(boxes_num):
             instance_overlap[first_index, first_index] = 1
             for second_index in range(first_index + 1, boxes_num):
-                if box_overlap[first_index, second_index] < 0.01: continue
+                if boxes_overlap[first_index, second_index] < 0.01: continue
 
-                x0, y0 = int(min(boxes[first_index, 0:2], boxes[second_index, 0:2]))
-                x1, y1 = int(max(boxes[first_index, 2:], boxes[second_index, 2:]))
+                x0, y0 = np.minimum(boxes[first_index, 0:2], boxes[second_index, 0:2]).astype(int)
+                x1, y1 = np.maximum(boxes[first_index, 2:], boxes[second_index, 2:]).astype(int)
 
                 intersection = (instances[first_index, y0:y1, x0:x1] &
                                 instances[second_index, y0:y1, x0:x1]).sum()
@@ -73,11 +73,11 @@ def mask_nms(cfg, mode, inputs, proposals, mask_logits):
                 instance_overlap[first_index, second_index] = intersection_over_union
                 instance_overlap[second_index, first_index] = intersection_over_union
 
-        #non-max suppress
+        # Non-max suppress
         box_scores = proposals[boxes_indices, 5]
         boxes_indices = list(np.argsort(-box_scores))
 
-        ##  https://www.pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
+        # https://www.pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
         keep = []
         while len(boxes_indices) > 0:
             i = boxes_indices[0]  # with current maximum score

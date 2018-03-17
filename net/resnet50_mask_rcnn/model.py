@@ -352,56 +352,59 @@ class MaskRcnnNet(nn.Module):
         mode = self.mode
         batch_size = len(inputs)
 
-        #features
+        # Features
         features = data_parallel(self.feature_net, inputs)
 
-        #rpn proposals -------------------------------------------
-        self.rpn_logits_flat, self.rpn_deltas_flat = data_parallel(self.rpn_head, features)
-        self.rpn_window = make_rpn_windows(cfg, features)
-        self.rpn_proposals = rpn_nms(cfg, mode, inputs, self.rpn_window, self.rpn_logits_flat,
-                                     self.rpn_deltas_flat)
+        # RPN proposals
+        self._rpn_logits_flat, self._rpn_deltas_flat = data_parallel(self.rpn_head, features)
+        rpn_window = make_rpn_windows(cfg, features)
+        rpn_proposals = rpn_nms(cfg, mode, inputs, rpn_window, self._rpn_logits_flat,
+                                self._rpn_deltas_flat)
 
         if mode in ['train', 'valid']:
-            self.rpn_labels, self.rpn_label_assigns, self.rpn_label_weights, self.rpn_targets, self.rpn_target_weights = \
-                make_rpn_target(cfg, mode, inputs, self.rpn_window, truth_boxes, truth_labels )
+            self._rpn_labels, _, self._rpn_label_weights, self._rpn_targets, self._rpn_target_weights = make_rpn_target(
+                cfg, mode, inputs, rpn_window, truth_boxes, truth_labels)
 
-            self.rpn_proposals, self.rcnn_labels, self.rcnn_assigns, self.rcnn_targets  = \
-                make_rcnn_target(cfg, mode, inputs, self.rpn_proposals, truth_boxes, truth_labels )
+            rpn_proposals, self._rcnn_labels, _, self._rcnn_targets  = \
+                make_rcnn_target(cfg, mode, inputs, rpn_proposals, truth_boxes, truth_labels )
 
-        #rcnn proposals ------------------------------------------------
-        self.rcnn_proposals = self.rpn_proposals
-        if len(self.rpn_proposals) > 0:
-            rcnn_crops = self.rcnn_crop(features, self.rpn_proposals)
-            self.rcnn_logits, self.rcnn_deltas = data_parallel(self.rcnn_head, rcnn_crops)
-            self.rcnn_proposals = rcnn_nms(cfg, mode, inputs, self.rpn_proposals, self.rcnn_logits,
-                                           self.rcnn_deltas)
+        # RCNN proposals
+        rcnn_proposals = rpn_proposals
+        if len(rpn_proposals) > 0:
+            rcnn_crops = self.rcnn_crop(features, rpn_proposals)
+            self._rcnn_logits, self._rcnn_deltas = data_parallel(self.rcnn_head, rcnn_crops)
+            rcnn_proposals = rcnn_nms(cfg, mode, inputs, rpn_proposals, self._rcnn_logits,
+                                      self._rcnn_deltas)
 
         if mode in ['train', 'valid']:
-            self.rcnn_proposals, self.mask_labels, self.mask_assigns, self.mask_instances,   = \
-                make_mask_target(cfg, mode, inputs,  self.rcnn_proposals, truth_boxes, truth_labels, truth_instances)
+            rcnn_proposals, self._mask_labels, _, self._mask_instances, = make_mask_target(
+                cfg, mode, inputs, rcnn_proposals, truth_boxes, truth_labels, truth_instances)
 
-        #segmentation  -------------------------------------------
-        self.detections = self.rcnn_proposals
+        # Segmentation
+        self._detections = rcnn_proposals
         self.masks = make_empty_masks(inputs)
 
-        if len(self.detections) > 0:
-            mask_crops = self.mask_crop(features, self.detections)
-            self.mask_logits = data_parallel(self.mask_head, mask_crops)
-            self.masks = mask_nms(cfg, mode, inputs, self.detections,
-                                  self.mask_logits)  #<todo> better nms for mask
+        if len(self._detections) > 0:
+            # ROI crop
+            mask_crops = self.mask_crop(features, self._detections)
+
+            # Mask head
+            self._mask_logits = data_parallel(self.mask_head, mask_crops)
+
+            self.masks = mask_nms(cfg, mode, inputs, self._detections, self._mask_logits)
 
     def loss(self, inputs, truth_boxes, truth_labels, truth_instances):
         cfg = self.cfg
 
-        self.rpn_cls_loss, self.rpn_reg_loss = \
-           rpn_loss( self.rpn_logits_flat, self.rpn_deltas_flat, self.rpn_labels, self.rpn_label_weights, self.rpn_targets, self.rpn_target_weights)
+        self.rpn_cls_loss, self.rpn_reg_loss = rpn_loss(
+            self._rpn_logits_flat, self._rpn_deltas_flat, self._rpn_labels, self._rpn_label_weights,
+            self._rpn_targets, self._rpn_target_weights)
 
-        self.rcnn_cls_loss, self.rcnn_reg_loss = \
-            rcnn_loss(self.rcnn_logits, self.rcnn_deltas, self.rcnn_labels, self.rcnn_targets)
+        self.rcnn_cls_loss, self.rcnn_reg_loss = rcnn_loss(self._rcnn_logits, self._rcnn_deltas,
+                                                           self._rcnn_labels, self._rcnn_targets)
 
         ## self.mask_cls_loss = Variable(torch.cuda.FloatTensor(1).zero_()).sum()
-        self.mask_cls_loss  = \
-             mask_loss( self.mask_logits, self.mask_labels, self.mask_instances )
+        self.mask_cls_loss = mask_loss(self._mask_logits, self._mask_labels, self._mask_instances)
 
         self.total_loss = self.rpn_cls_loss + self.rpn_reg_loss \
                           + self.rcnn_cls_loss +  self.rcnn_reg_loss \
@@ -597,9 +600,8 @@ def run_check_mask_net():
     mask_net.set_mode('eval')
     mask_net(inputs)
 
-    print('rpn_logits_flat ', mask_net.rpn_logits_flat.size())
-    print('rpn_probs_flat  ', mask_net.rpn_probs_flat.size())
-    print('rpn_deltas_flat ', mask_net.rpn_deltas_flat.size())
+    print('rpn_logits_flat ', mask_net._rpn_logits_flat.size())
+    print('_rpn_deltas_flat ', mask_net._rpn_deltas_flat.size())
     print('')
 
 

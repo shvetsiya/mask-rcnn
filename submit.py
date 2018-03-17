@@ -49,8 +49,8 @@ def _revert(net, images):
         image = images[b]
         height, width = image.shape[:2]
 
-        index = (net.detections[:, 0] == b).nonzero().view(-1)
-        net.detections = torch_clip_proposals(net.detections, index, width, height)
+        index = (net._detections[:, 0] == b).nonzero().view(-1)
+        net._detections = torch_clip_proposals(net._detections, index, width, height)
 
         net.masks[b] = net.masks[b][:height, :width]
 
@@ -129,7 +129,8 @@ def run_submit():
             # Resize results to original images shapes.
             _revert(net, images)
 
-        detections = net.detections
+        # TODO(alexander): Don't use `_detections` - make getter for results.
+        detections = net._detections
         masks = net.masks
 
         for b in range(batch_size):

@@ -100,8 +100,8 @@ class Evaluator(object):
             image = images[index_in_batch]
             height, width = image.shape[:2]
 
-            index = (net.detections[:, 0] == index_in_batch).nonzero().view(-1)
-            net.detections = torch_clip_proposals(net.detections, index, width, height)
+            index = (net._detections[:, 0] == index_in_batch).nonzero().view(-1)
+            net._detections = torch_clip_proposals(net._detections, index, width, height)
             net.masks[index_in_batch] = net.masks[index_in_batch][:height, :width]
 
     def _eval_augment(self, image, multi_mask, meta, index):
@@ -225,7 +225,7 @@ class Evaluator(object):
 
             inputs = inputs.data.cpu().numpy()
             masks = net.masks
-            detections = net.detections.cpu().numpy()
+            detections = net._detections.cpu().numpy()
 
             for index_in_batch in range(batch_size):
                 test_num += 1
