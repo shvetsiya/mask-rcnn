@@ -382,7 +382,7 @@ class MaskRcnnNet(nn.Module):
 
         #segmentation  -------------------------------------------
         self.detections = self.rcnn_proposals
-        self.masks = make_empty_masks(cfg, mode, inputs)
+        self.masks = make_empty_masks(inputs)
 
         if len(self.detections) > 0:
             mask_crops = self.mask_crop(features, self.detections)

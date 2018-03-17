@@ -118,16 +118,16 @@ def run_submit():
     net.set_mode('test')
 
     for inputs, images, indices in tqdm(test_loader):
+        batch_size = inputs.size()[0]
+        # NOTE: Current version support batch_size==1 for variable size input. To use
+        # batch_size > 1, need to fix code for net.windows, etc.
+        assert (batch_size == 1)
+
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
             net(inputs)
             # Resize results to original images shapes.
             _revert(net, images)
-
-        batch_size = inputs.size()[0]
-        # NOTE: Current version support batch_size==1 for variable size input. To use
-        # batch_size > 1, need to fix code for net.windows, etc.
-        assert (batch_size == 1)
 
         detections = net.detections
         masks = net.masks

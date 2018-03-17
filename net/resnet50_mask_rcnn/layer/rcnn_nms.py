@@ -13,8 +13,6 @@ def rcnn_decode(window, delta):
     return box_transform_inv(window, delta)
 
 
-#
-#
 # def draw_rcnn_pre_nms(image, probs, deltas, proposals, cfg, colors, names, threshold=-1, is_before=1, is_after=1):
 #
 #     height,width = image.shape[0:2]
@@ -60,14 +58,10 @@ def rcnn_decode(window, delta):
 #
 #this is in cpu: <todo> change to gpu ?
 def rcnn_nms(cfg, mode, inputs, proposals, logits, deltas):
-
-    if mode in [
-            'train',
-    ]:
+    if mode in ['train']:
         nms_pre_score_threshold = cfg.rcnn_train_nms_pre_score_threshold
         nms_overlap_threshold = cfg.rcnn_train_nms_overlap_threshold
         nms_min_size = cfg.rcnn_train_nms_min_size
-
     elif mode in ['valid', 'test', 'eval']:
         nms_pre_score_threshold = cfg.rcnn_test_nms_pre_score_threshold
         nms_overlap_threshold = cfg.rcnn_test_nms_overlap_threshold
@@ -75,7 +69,6 @@ def rcnn_nms(cfg, mode, inputs, proposals, logits, deltas):
 
         if mode in ['eval']:
             nms_pre_score_threshold = 0.05  # set low numbe r to make roc curve.
-
     else:
         raise ValueError('rcnn_nms(): invalid mode = %s?' % mode)
 
