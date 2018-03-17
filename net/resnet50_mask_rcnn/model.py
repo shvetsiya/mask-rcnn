@@ -1,3 +1,7 @@
+from typing import List
+import torch
+from torch.autograd import Variable
+
 from common import *
 from net.lib.roi_align_pool_tf.module import RoIAlign as Crop
 
@@ -332,6 +336,21 @@ class MaskHead(nn.Module):
 
 class MaskRcnnNet(nn.Module):
 
+    class Result(object):
+        """A class which represents output of MaskRcnnNet.
+        """
+
+        def __init__(self, multi_mask: np.array, bounding_boxes: List[BoundingBox]):
+            """Inits result with multi_mask and corresponding bounding boxes.
+
+            Args:
+                multi_mask: Int array of input image size. 0 means background, k (k > 0) - k'th
+                    object.
+                bounding_boxes: A list of BoundingBox, which corresponds to the multi_mask.
+            """
+            self.multi_mask = multi_mask
+            self.bounding_boxes = bounding_boxes
+
     def __init__(self, cfg: Configuration):
         super(MaskRcnnNet, self).__init__()
         self.version = 'net version \'mask-rcnn-resnet50-fpn\''
@@ -382,7 +401,6 @@ class MaskRcnnNet(nn.Module):
 
         # Segmentation
         self._detections = rcnn_proposals
-        self.masks = make_empty_masks(inputs)
 
         if len(self._detections) > 0:
             # ROI crop
@@ -391,7 +409,15 @@ class MaskRcnnNet(nn.Module):
             # Mask head
             self._mask_logits = data_parallel(self.mask_head, mask_crops)
 
-            self.masks = mask_nms(cfg, mode, inputs, self._detections, self._mask_logits)
+        self.results = self._construct_results(cfg, inputs, self._detections, self._mask_logits)
+
+    def _construct_results(self, cfg: Configuration, inputs: Variable, _detections: np.array,
+                           _mask_logits: np.array) -> List[Result]:
+        masks, bounding_boxes = masks_nms_for_batch(cfg, inputs, _detections, _mask_logits)
+        results = []
+        for index_in_batch in range(len(inputs)):
+            results.append(self.Result(masks[index_in_batch], bounding_boxes[index_in_batch]))
+        return results
 
     def loss(self, inputs, truth_boxes, truth_labels, truth_instances):
         cfg = self.cfg
@@ -404,6 +430,7 @@ class MaskRcnnNet(nn.Module):
                                                            self._rcnn_labels, self._rcnn_targets)
 
         ## self.mask_cls_loss = Variable(torch.cuda.FloatTensor(1).zero_()).sum()
+        # TODO(alexander): self._mask_logits can be not updated at `forward` step.
         self.mask_cls_loss = mask_loss(self._mask_logits, self._mask_labels, self._mask_instances)
 
         self.total_loss = self.rpn_cls_loss + self.rpn_reg_loss \

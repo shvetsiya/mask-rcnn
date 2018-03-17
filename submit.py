@@ -28,31 +28,24 @@ from dataset.transform import pad_to_factor
 OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
 
 
-def _revert(net, images):
+def _revert(results, images):
     """Reverts test-time-augmentation (e.g., unpad, scale back to input image size, etc).
     """
 
-    def torch_clip_proposals(proposals, index, width, height):
-        boxes = torch.stack((
-            proposals[index, 0],
-            proposals[index, 1].clamp(0, width - 1),
-            proposals[index, 2].clamp(0, height - 1),
-            proposals[index, 3].clamp(0, width - 1),
-            proposals[index, 4].clamp(0, height - 1),
-            proposals[index, 5],
-            proposals[index, 6],
-        ), 1)
-        return proposals
+    assert len(results) == len(images), 'Results and images should be the same length'
 
     batch_size = len(images)
-    for b in range(batch_size):
-        image = images[b]
+    for index_in_batch in range(batch_size):
+        result = results[index_in_batch]
+        image = images[index_in_batch]
         height, width = image.shape[:2]
 
-        index = (net._detections[:, 0] == b).nonzero().view(-1)
-        net._detections = torch_clip_proposals(net._detections, index, width, height)
-
-        net.masks[b] = net.masks[b][:height, :width]
+        result.multi_mask = result.multi_mask[:height, :width]
+        for bounding_box in result.bounding_boxes:
+            x0, y0, x1, y1 = bounding_box.coordinates
+            x0, x1 = min((x0, x1), (height, height))
+            y0, y1 = min((y0, y1), (width, width))
+            bounding_box.coordinates = (x0, y0, x1, y1)
 
 
 def _submit_augment(image, index):
@@ -63,9 +56,9 @@ def _submit_augment(image, index):
 
 def _submit_collate(batch):
     batch_size = len(batch)
-    inputs = torch.stack([batch[b][0] for b in range(batch_size)], 0)
-    images = [batch[b][1] for b in range(batch_size)]
-    indices = [batch[b][2] for b in range(batch_size)]
+    inputs = torch.stack([batch[index_in_batch][0] for index_in_batch in range(batch_size)], 0)
+    images = [batch[index_in_batch][1] for index_in_batch in range(batch_size)]
+    indices = [batch[index_in_batch][2] for index_in_batch in range(batch_size)]
 
     return [inputs, images, indices]
 
@@ -126,21 +119,17 @@ def run_submit():
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
             net(inputs)
-            # Resize results to original images shapes.
-            _revert(net, images)
 
-        # TODO(alexander): Don't use `_detections` - make getter for results.
-        detections = net._detections
-        masks = net.masks
+        # Resize results to original images shapes.
+        results = net.results
+        _revert(results, images)
 
-        for b in range(batch_size):
-            image = images[b]
-            mask = masks[b].astype(np.uint8)
-            index = indices[b]
+        for index_in_batch in range(batch_size):
+            image = images[index_in_batch]
+            index = indices[index_in_batch]
+            mask = results[index_in_batch].multi_mask
 
             image_id = test_dataset.ids[index]
-            box_indices = np.where(detections[:, 0] == b)[0]
-            boxes = detections[box_indices, 1:5]
 
             save_prediction_info(image_id, image, mask)
 

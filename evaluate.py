@@ -76,40 +76,31 @@ class Evaluator(object):
         logger.write('\tlen(self.test_dataset)  = %d\n' % (len(self.test_dataset)))
         logger.write('\n')
 
-    def _revert(self, net: MaskRcnnNet, images: list):
-        """Adjusts the net results to original images sizes.
-
-        returns:
-            nothing
+    def _revert(sefl, results, images):
+        """Reverts test-time-augmentation (e.g., unpad, scale back to input image size, etc).
         """
 
-        def torch_clip_proposals(proposals, index, width, height):
-            boxes = torch.stack((
-                proposals[index, 0],
-                proposals[index, 1].clamp(0, width - 1),
-                proposals[index, 2].clamp(0, height - 1),
-                proposals[index, 3].clamp(0, width - 1),
-                proposals[index, 4].clamp(0, height - 1),
-                proposals[index, 5],
-                proposals[index, 6],
-            ), 1)
-            return proposals
+        assert len(results) == len(images), 'Results and images should be the same length'
 
         batch_size = len(images)
         for index_in_batch in range(batch_size):
+            result = results[index_in_batch]
             image = images[index_in_batch]
             height, width = image.shape[:2]
 
-            index = (net._detections[:, 0] == index_in_batch).nonzero().view(-1)
-            net._detections = torch_clip_proposals(net._detections, index, width, height)
-            net.masks[index_in_batch] = net.masks[index_in_batch][:height, :width]
+            result.multi_mask = result.multi_mask[:height, :width]
+            for bounding_box in result.bounding_boxes:
+                x0, y0, x1, y1 = bounding_box.coordinates
+                x0, x1 = min((x0, x1), (height, height))
+                y0, y1 = min((y0, y1), (width, width))
+                bounding_box.coordinates = (x0, y0, x1, y1)
 
     def _eval_augment(self, image, multi_mask, meta, index):
         pad_image = pad_to_factor(image, factor=16)
         input = torch.from_numpy(pad_image.transpose((2, 0, 1))).float().div(255)
-        box, label, instance = multi_mask_to_annotation(multi_mask)
+        boxes_coordinates, label, instance = multi_mask_to_annotation(multi_mask)
 
-        return input, box, label, instance, meta, image, index
+        return input, boxes_coordinates, label, instance, meta, image, index
 
     def _eval_collate(self, batch):
         batch_size = len(batch)
@@ -124,7 +115,7 @@ class Evaluator(object):
 
         return [inputs, boxes, labels, instances, metas, images, indices]
 
-    def _save_prediction_png(self, name: str, mask, detection, truth_box, truth_label,
+    def _save_prediction_png(self, name: str, mask, proposal_boxes, truth_box, truth_label,
                              truth_instance, image):
         cfg = self.cfg
 
@@ -134,7 +125,7 @@ class Evaluator(object):
             mask, image=color_overlay, color=[255, 255, 255])
 
         all1 = np.hstack((image, contour_overlay, color_overlay_with_contour))
-        all6 = draw_multi_proposal_metric(cfg, image, detection, truth_box, truth_label,
+        all6 = draw_multi_proposal_metric(cfg, image, proposal_boxes, truth_box, truth_label,
                                           [0, 255, 255], [255, 0, 255], [255, 255, 0])
         all7 = draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance)
 
@@ -155,8 +146,8 @@ class Evaluator(object):
             bb_results: bounding boxes results.
         """
         for threshold_index, threshold in enumerate(thresholds):
-            for box, result in zip(truth_boxes, truth_box_results[threshold_index]):
-                x0, y0, x1, y1 = box.astype(np.int32)
+            for boxes_coordinates, result in zip(truth_boxes, truth_box_results[threshold_index]):
+                x0, y0, x1, y1 = boxes_coordinates.astype(np.int32)
                 w, h = (x1 - x0, y1 - y0)
                 bb_results.loc[bb_results.shape[0]] = {
                     'id': name,
@@ -215,28 +206,25 @@ class Evaluator(object):
             with torch.no_grad():
                 inputs = Variable(inputs).cuda()
                 net(inputs, truth_boxes, truth_labels, truth_instances)
-                # Resize results to original images shapes.
-                self._revert(net, images)
+
+            results = net.results
+            # Resize results to original images shapes.
+            self._revert(results, images)
 
             batch_size = inputs.size()[0]
             # NOTE: Current version support batch_size==1 for variable size input. To use
             # batch_size > 1, need to fix code for net.windows, etc.
             assert (batch_size == 1)
 
-            inputs = inputs.data.cpu().numpy()
-            masks = net.masks
-            detections = net._detections.cpu().numpy()
-
             for index_in_batch in range(batch_size):
                 test_num += 1
 
+                mask = results[index_in_batch].multi_mask
+                bounding_boxes = results[index_in_batch].bounding_boxes
                 image = images[index_in_batch]
                 height, width = image.shape[:2]
-                mask = masks[index_in_batch]
 
-                index = np.where(detections[:, 0] == index_in_batch)[0]
-                detection = detections[index]
-                box = detection[:, 1:5]
+                boxes_coordinates = np.array([bb.coordinates for bb in bounding_boxes])
 
                 truth_mask = instance_to_multi_mask(truth_instances[index_in_batch])
                 truth_box = truth_boxes[index_in_batch]
@@ -247,7 +235,7 @@ class Evaluator(object):
                     mask, truth_mask, t_range=thresholds)
 
                 box_precision, box_recall, box_result, truth_box_result = \
-                    compute_precision_for_box(box, truth_box, truth_label, thresholds)
+                    compute_precision_for_box(boxes_coordinates, truth_box, truth_label, thresholds)
 
                 mask_average_precisions.append(mask_average_precision)
                 box_precisions_50.append(box_precision[0])
@@ -262,7 +250,7 @@ class Evaluator(object):
                 self._save_prediction_png(
                     name,
                     mask=mask,
-                    detection=detection,
+                    proposal_boxes=boxes_coordinates,
                     truth_box=truth_box,
                     truth_label=truth_label,
                     truth_instance=truth_instance,
@@ -293,6 +281,6 @@ class Evaluator(object):
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    model_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/00008500_model.pth'
+    model_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
     evaluator = Evaluator()
     evaluator.run_evaluate(model_checkpoint)

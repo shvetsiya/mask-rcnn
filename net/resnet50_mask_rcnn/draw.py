@@ -70,17 +70,17 @@ def draw_multi_rpn_delta(cfg, image, rpn_prob_flat, rpn_delta_flat, window, colo
         cv2.rectangle(image_box, (x0, y0), (x1, y1), color, 1)
         image_point[cy, cx] = color
 
-    draw_shadow_text(image_box, 'rpn-box', (5, 15), 0.5, (255, 255, 255), 1)
+    draw_shadow_text(image_box, 'rpn-proposal_boxes', (5, 15), 0.5, (255, 255, 255), 1)
     draw_shadow_text(image_point, 'point', (5, 15), 0.5, (255, 255, 255), 1)
     all = np.hstack([image_box, image_point])
     return all
 
 
 #pink
-def draw_multi_rpn_proposal(cfg, image, proposal):
+def draw_multi_rpn_proposal(cfg, image, proposal_boxes):
 
     image = image.copy()
-    for p in proposal:
+    for p in proposal_boxes:
         x0, y0, x1, y1 = p[1:5].astype(np.int32)
         score = p[5]
         color = to_color(score, [255, 0, 255])
@@ -90,11 +90,11 @@ def draw_multi_rpn_proposal(cfg, image, proposal):
 
 
 #yellow
-def draw_truth_box(cfg, image, truth_box, truth_label):
+def draw_truth_box(cfg, image, truth_boxes, truth_label):
 
     image = image.copy()
-    if len(truth_box) > 0:
-        for b, l in zip(truth_box, truth_label):
+    if len(truth_boxes) > 0:
+        for b, l in zip(truth_boxes, truth_label):
             x0, y0, x1, y1 = b.astype(np.int32)
             if l <= 0: continue
             cv2.rectangle(image, (x0, y0), (x1, y1), [0, 255, 255], 1)
@@ -104,8 +104,8 @@ def draw_truth_box(cfg, image, truth_box, truth_label):
 
 def draw_multi_proposal_metric(cfg,
                                image,
-                               proposal,
-                               truth_box,
+                               proposal_boxes,
+                               truth_boxes,
                                truth_label,
                                color0=[0, 255, 255],
                                color1=[255, 0, 255],
@@ -121,19 +121,18 @@ def draw_multi_proposal_metric(cfg,
     image_invalid = image.copy()  #white
     precision = 0
 
-    if len(proposal) > 0 and len(truth_box) > 0:
+    if len(proposal_boxes) > 0 and len(truth_boxes) > 0:
         thresholds = [
             0.5,
         ]
 
-        box = proposal[:, 1:5]
         precisions, recalls, results, truth_results = \
-            compute_precision_for_box(box, truth_box, truth_label, thresholds)
+            compute_precision_for_box(proposal_boxes, truth_boxes, truth_label, thresholds)
 
         precision, recall, result, truth_result, threshold = \
             precisions[0], recalls[0], results[0], truth_results[0], thresholds[0]
 
-        for i, b in enumerate(truth_box):
+        for i, b in enumerate(truth_boxes):
             x0, y0, x1, y1 = b.astype(np.int32)
 
             if truth_result[i] == HIT:
@@ -147,7 +146,7 @@ def draw_multi_proposal_metric(cfg,
             if truth_result[i] == INVALID:
                 draw_screen_rect(image_invalid, (x0, y0), (x1, y1), (255, 255, 255), 0.5)
 
-        for i, b in enumerate(box):
+        for i, b in enumerate(proposal_boxes):
             x0, y0, x1, y1 = b.astype(np.int32)
             cv2.rectangle(image_proposal, (x0, y0), (x1, y1), color1, thickness)
 
@@ -161,7 +160,7 @@ def draw_multi_proposal_metric(cfg,
                 cv2.rectangle(image_invalid, (x0, y0), (x1, y1), (255, 255, 255), thickness)
 
     draw_shadow_text(image_truth, 'truth', (5, 15), 0.5, (255, 255, 255), 1)
-    draw_shadow_text(image_proposal, 'proposal', (5, 15), 0.5, (255, 255, 255), 1)
+    draw_shadow_text(image_proposal, 'proposal_boxes', (5, 15), 0.5, (255, 255, 255), 1)
     draw_shadow_text(image_hit, 'hit', (5, 15), 0.5, (255, 255, 255), 1)
     draw_shadow_text(image_miss, 'miss', (5, 15), 0.5, (255, 255, 255), 1)
     draw_shadow_text(image_fp, 'fp', (5, 15), 0.5, (255, 255, 255), 1)
@@ -172,7 +171,7 @@ def draw_multi_proposal_metric(cfg,
     return all
 
 
-def draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance):
+def draw_mask_metric(cfg, image, mask, truth_boxes, truth_label, truth_instance):
 
     H, W = image.shape[:2]
     overlay_truth = np.zeros((H, W, 3), np.uint8)  #yellow
@@ -185,7 +184,7 @@ def draw_mask_metric(cfg, image, mask, truth_box, truth_label, truth_instance):
     precision_50 = 0
     precision_70 = 0
 
-    if len(truth_box) > 0:
+    if len(truth_boxes) > 0:
 
         #pixel error: fp and miss
         truth_mask = instance_to_multi_mask(truth_instance)
