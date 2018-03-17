@@ -6,6 +6,7 @@ import pandas as pd
 import cv2
 import glob
 import time
+from tqdm import tqdm
 from timeit import default_timer as timer
 
 # torch libs
@@ -23,6 +24,8 @@ from net.metric import run_length_encode
 from dataset.reader import ScienceDataset, multi_mask_to_contour_overlay, \
         multi_mask_to_color_overlay
 from dataset.transform import pad_to_factor
+
+OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
 
 
 def _revert(net, images):
@@ -68,7 +71,6 @@ def _submit_collate(batch):
 
 
 def run_submit():
-    OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
     initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
 
     os.makedirs(OUT_DIR + '/submit/overlays', exist_ok=True)
@@ -97,13 +99,7 @@ def run_submit():
 
     log.write('** dataset setting **\n')
 
-    test_dataset = ScienceDataset(
-        #'train1_ids_gray_only1_500',
-        #'valid1_ids_gray_only1_43',
-        #'debug1_ids_gray_only_10',
-        'test1_ids_gray_only_65.txt',
-        mode='test',
-        transform=_submit_augment)
+    test_dataset = ScienceDataset('test1_ids_gray_only_53', mode='test', transform=_submit_augment)
     test_loader = DataLoader(
         test_dataset,
         sampler=SequentialSampler(test_dataset),
@@ -117,20 +113,11 @@ def run_submit():
     log.write('\tlen(test_dataset)  = %d\n' % (len(test_dataset)))
     log.write('\n')
 
-    ## start evaluation here! ##############################################
     log.write('** start evaluation here! **\n')
-    start = timer()
 
-    test_num = len(test_loader.dataset)
-    for i, (inputs, images, indices) in enumerate(test_loader, 0):
-        print(
-            '\rpredicting: %10d/%d (%0.0f %%)  %0.2f min' %
-            (i, test_num - 1, 100 * i / (test_num - 1), (timer() - start) / 60),
-            end='',
-            flush=True)
-        time.sleep(0.01)
+    net.set_mode('test')
 
-        net.set_mode('test')
+    for inputs, images, indices in tqdm(test_loader):
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
             net(inputs)
@@ -142,42 +129,37 @@ def run_submit():
         # batch_size > 1, need to fix code for net.windows, etc.
         assert (batch_size == 1)
 
-        inputs = inputs.data.cpu().numpy()
-
-        window = net.rpn_window
-        rpn_logits_flat = net.rpn_logits_flat.data.cpu().numpy()
-        rpn_deltas_flat = net.rpn_deltas_flat.data.cpu().numpy()
         detections = net.detections
         masks = net.masks
 
         for b in range(batch_size):
             image = images[b]
-            mask = masks[b]
+            mask = masks[b].astype(np.uint8)
+            index = indices[b]
 
-            contour_overlay = multi_mask_to_contour_overlay(mask, image, color=[0, 255, 0])
-            color_overlay = multi_mask_to_color_overlay(mask, color='summer')
-            color1_overlay = multi_mask_to_contour_overlay(
-                mask, color_overlay, color=[255, 255, 255])
+            image_id = test_dataset.ids[index]
+            box_indices = np.where(detections[:, 0] == b)[0]
+            boxes = detections[box_indices, 1:5]
 
-            all = np.hstack((image, contour_overlay, color1_overlay))
+            save_prediction_info(image_id, image, mask)
 
-            # --------------------------------------------
-            id = test_dataset.ids[indices[b]]
-            name = id.split('/')[-1]
 
-            np.save(OUT_DIR + '/submit/npys/%s.npy' % (name), mask)
-            cv2.imwrite(OUT_DIR + '/submit/overlays/%s.png' % (name), all)
+def save_prediction_info(image_id: str, image: np.array, mask: np.array):
+    contour_overlay = multi_mask_to_contour_overlay(mask, image, color=[0, 255, 0])
+    color_overlay = multi_mask_to_color_overlay(mask, color='summer')
+    color1_overlay = multi_mask_to_contour_overlay(mask, color_overlay, color=[255, 255, 255])
 
-            os.makedirs(OUT_DIR + '/submit/psds/%s' % name, exist_ok=True)
-            cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.png' % (name, name), image)
-            cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.mask.png' % (name, name), color_overlay)
-            cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.contour.png' % (name, name), contour_overlay)
+    all = np.hstack((image, contour_overlay, color1_overlay))
 
-    assert (test_num == len(test_loader.sampler))
+    name = image_id.split('/')[-1]
 
-    log.write('initial_checkpoint  = %s\n' % (initial_checkpoint))
-    log.write('test_num  = %d\n' % (test_num))
-    log.write('\n')
+    np.save(OUT_DIR + '/submit/npys/%s.npy' % (name), mask)
+    cv2.imwrite(OUT_DIR + '/submit/overlays/%s.png' % (name), all)
+
+    os.makedirs(OUT_DIR + '/submit/psds/%s' % name, exist_ok=True)
+    cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.png' % (name, name), image)
+    cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.mask.png' % (name, name), color_overlay)
+    cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.contour.png' % (name, name), contour_overlay)
 
 
 def filter_small(multi_mask, threshold):
@@ -198,7 +180,6 @@ def filter_small(multi_mask, threshold):
 
 
 def shrink_by_one(multi_mask):
-
     multi_mask1 = np.zeros(multi_mask.shape, np.int32)
 
     num = int(multi_mask.max())
@@ -212,17 +193,14 @@ def shrink_by_one(multi_mask):
 
 
 def run_npy_to_sumbit_csv():
-
     image_dir = '../image/stage1_test/images'
     submit_dir = '../results/mask-rcnn-50-gray500-02/submit'
 
     npy_dir = submit_dir + '/npys'
     csv_file = submit_dir + '/submission-gray53-only.csv'
 
-    ## start -----------------------------
-    all_num = 0
-    cvs_ImageId = []
-    cvs_EncodedPixels = []
+    image_ids = []
+    encoded_pixels = []
 
     npy_files = glob.glob(npy_dir + '/*.npy')
     for npy_file in npy_files:
@@ -235,41 +213,24 @@ def run_npy_to_sumbit_csv():
         multi_mask = filter_small(multi_mask, 8)
         #<todo> ---------------------------------
 
-        num = int(multi_mask.max())
-        for m in range(num):
-            rle = run_length_encode(multi_mask == m + 1)
-            cvs_ImageId.append(name)
-            cvs_EncodedPixels.append(rle)
-        all_num += num
+        for color in range(1, multi_mask.max() + 1):
+            rle = run_length_encode(multi_mask == color)
+            image_ids.append(name)
+            encoded_pixels.append(rle)
 
-        #<debug> ------------------------------------
-        print(all_num, num)  ##GT is 4152?
-        image_file = image_dir + '/%s.png' % name
-        image = cv2.imread(image_file)
-        color_overlay = multi_mask_to_color_overlay(multi_mask)
-        color1_overlay = multi_mask_to_contour_overlay(multi_mask, color_overlay)
-        contour_overlay = multi_mask_to_contour_overlay(multi_mask, image, [0, 255, 0])
-        #all = np.hstack((image, contour_overlay, color1_overlay)).astype(np.uint8)
-        #image_show('all',all)
-        #cv2.waitKey(1)
-
-    #exit(0)
-    # submission csv  ----------------------------
-
-    # kaggle submission requires all test image to be listed!
+    # NOTE: Kaggle submission requires all test image to be listed.
     for t in ALL_TEST_IMAGE_ID:
-        cvs_ImageId.append(t)
-        cvs_EncodedPixels.append('')  #null
+        image_ids.append(t)
+        encoded_pixels.append('')  #null
 
-    df = pd.DataFrame({'ImageId': cvs_ImageId, 'EncodedPixels': cvs_EncodedPixels})
+    df = pd.DataFrame({'ImageId': image_ids, 'EncodedPixels': encoded_pixels})
     df.to_csv(csv_file, index=False, columns=['ImageId', 'EncodedPixels'])
 
 
-# main #################################################################
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
     run_submit()
     run_npy_to_sumbit_csv()
 
-    print('\nsucess!')
+    print('Sucess!')
