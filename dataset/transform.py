@@ -5,10 +5,13 @@ import math
 import cv2
 import numpy as np
 import skimage.morphology
+
+
 ## for debug
 def dummy_transform(image):
     print('\tdummy_transform')
     return image
+
 
 def resize_to_factor2(image, mask, factor=16):
 

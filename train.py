@@ -26,7 +26,6 @@ from dataset.reader import ScienceDataset, multi_mask_to_annotation
 
 import dataset.transform as tr
 
-
 WIDTH, HEIGHT = 256, 256
 
 
@@ -104,12 +103,12 @@ def run_train():
     ##
 
     pretrain_file = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
-        #None #RESULTS_DIR + '/mask-single-shot-dummy-1a/checkpoint/00028000_model.pth'
+    #None #RESULTS_DIR + '/mask-single-shot-dummy-1a/checkpoint/00028000_model.pth'
     skip = ['crop', 'mask']
 
     ## setup  -----------------
     os.makedirs(out_dir + '/checkpoint', exist_ok=True)
-    os.makedirs(out_dir + '/train', exist_ok=True)    
+    os.makedirs(out_dir + '/train', exist_ok=True)
 
     log = Logger()
     log.open(out_dir + '/log.train.txt', mode='a')

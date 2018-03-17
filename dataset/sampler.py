@@ -1,5 +1,6 @@
 from torch.utils.data.sampler import Sampler
 
+
 class ConstantSampler(Sampler):
 
     def __init__(self, data, list):
