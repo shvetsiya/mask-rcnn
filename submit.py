@@ -14,6 +14,9 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SequentialSampler
+from torchvision.transforms import ToTensor
+
+from tensorboardX import SummaryWriter
 
 from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH, ALL_TEST_IMAGE_ID
 
@@ -26,6 +29,8 @@ from dataset.reader import ScienceDataset, multi_mask_to_contour_overlay, \
 from dataset.transform import pad_to_factor
 
 OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
+
+tb_log = SummaryWriter(OUT_DIR + '/tb_logs/submit/' + IDENTIFIER)
 
 
 def _revert(results, images):
@@ -68,7 +73,6 @@ def run_submit():
 
     os.makedirs(OUT_DIR + '/submit/overlays', exist_ok=True)
     os.makedirs(OUT_DIR + '/submit/npys', exist_ok=True)
-    os.makedirs(OUT_DIR + '/checkpoint', exist_ok=True)
 
     log = Logger()
     log.open(OUT_DIR + '/log.evaluate.txt', mode='a')
@@ -139,17 +143,19 @@ def save_prediction_info(image_id: str, image: np.array, mask: np.array):
     color_overlay = multi_mask_to_color_overlay(mask, color='summer')
     color1_overlay = multi_mask_to_contour_overlay(mask, color_overlay, color=[255, 255, 255])
 
-    all = np.hstack((image, contour_overlay, color1_overlay))
+    stacked_results = np.hstack((image, contour_overlay, color1_overlay))
 
     name = image_id.split('/')[-1]
 
     np.save(OUT_DIR + '/submit/npys/%s.npy' % (name), mask)
-    cv2.imwrite(OUT_DIR + '/submit/overlays/%s.png' % (name), all)
+    cv2.imwrite(OUT_DIR + '/submit/overlays/%s.png' % (name), stacked_results)
 
     os.makedirs(OUT_DIR + '/submit/psds/%s' % name, exist_ok=True)
     cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.png' % (name, name), image)
     cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.mask.png' % (name, name), color_overlay)
     cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.contour.png' % (name, name), contour_overlay)
+
+    tb_log.add_image(name, ToTensor()(stacked_results))
 
 
 def filter_small(multi_mask, threshold):
