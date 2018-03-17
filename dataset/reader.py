@@ -5,16 +5,13 @@ from torch.utils.data.dataset import Dataset
 from torch.utils.data.sampler import RandomSampler
 import matplotlib.pyplot as plt
 
-#from dataset.transform import *
-# from dataset.sampler import *
-
 from timeit import default_timer as timer
 from utility.file import read_list_from_file
 from utility.draw import image_show
 from common import DATA_DIR
 from net.lib.box.process import is_big_box, is_small_box, is_small_box_at_boundary
 
-#data reader  ----------------------------------------------------------------
+
 MIN_SIZE = 6
 MAX_SIZE = 128  #np.inf
 IGNORE_BOUNDARY = -1
@@ -81,7 +78,8 @@ def multi_mask_to_color_overlay(multi_mask, image=None, color=None):
     height, width = multi_mask.shape[:2]
     overlay = np.zeros((height, width, 3), np.uint8) if image is None else image.copy()
     num_masks = int(multi_mask.max())
-    if num_masks == 0: return overlay
+    if num_masks == 0:
+        return overlay
 
     if type(color) in [str] or color is None:
         #https://matplotlib.org/xkcd/examples/color/colormaps_reference.html
@@ -123,10 +121,10 @@ def multi_mask_to_contour_overlay(multi_mask, image=None, color=[255, 255, 255])
 def mask_to_outer_contour(mask):
     pad = np.lib.pad(mask, ((1, 1), (1, 1)), 'reflect')
     contour = (~mask) & (
-            (pad[1:-1,1:-1] != pad[:-2,1:-1]) \
-          | (pad[1:-1,1:-1] != pad[2:,1:-1])  \
-          | (pad[1:-1,1:-1] != pad[1:-1,:-2]) \
-          | (pad[1:-1,1:-1] != pad[1:-1,2:])
+            (pad[1:-1, 1:-1] != pad[:-2, 1:-1]) \
+          | (pad[1:-1, 1:-1] != pad[2:, 1:-1])  \
+          | (pad[1:-1, 1:-1] != pad[1:-1, :-2]) \
+          | (pad[1:-1, 1:-1] != pad[1:-1, 2:])
     )
     return contour
 
@@ -134,10 +132,10 @@ def mask_to_outer_contour(mask):
 def mask_to_inner_contour(mask):
     pad = np.lib.pad(mask, ((1, 1), (1, 1)), 'reflect')
     contour = mask & (
-            (pad[1:-1,1:-1] != pad[:-2,1:-1]) \
-          | (pad[1:-1,1:-1] != pad[2:,1:-1])  \
-          | (pad[1:-1,1:-1] != pad[1:-1,:-2]) \
-          | (pad[1:-1,1:-1] != pad[1:-1,2:])
+            (pad[1:-1, 1:-1] != pad[ :-2, 1:-1]) \
+          | (pad[1:-1, 1:-1] != pad[  2:, 1:-1])  \
+          | (pad[1:-1, 1:-1] != pad[1:-1, :-2]) \
+          | (pad[1:-1, 1:-1] != pad[1:-1, 2:])
     )
     return contour
 

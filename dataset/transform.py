@@ -1,4 +1,3 @@
-#from common import *
 import os
 import random
 import math

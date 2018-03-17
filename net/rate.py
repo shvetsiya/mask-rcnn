@@ -1,6 +1,7 @@
-# learning rate schduler
-from common import *
-
+import os
+import numpy as np
+import math
+import matplotlib.pylab as plt
 
 # http://elgoacademy.org/anatomy-matplotlib-part-1/
 def plot_rates(fig, lrs, num_epoches, title=''):
@@ -87,13 +88,12 @@ class DecayLR():
         return string
 
 
-# 'Cyclical Learning Rates for Training Neural Networks'- Leslie N. Smith, arxiv 2017
-#       https://arxiv.org/abs/1506.01186
-#       https://github.com/bckenstler/CLR
-
-
 class CyclicLR():
-
+    """
+    'Cyclical Learning Rates for Training Neural Networks'- Leslie N. Smith, arxiv 2017
+    https://arxiv.org/abs/1506.01186
+    https://github.com/bckenstler/CLR
+    """
     def __init__(self,
                  base_lr=0.001,
                  max_lr=0.006,
@@ -199,9 +199,9 @@ if __name__ == '__main__':
         mode='triangular2',
         gamma=1.,
         scale_fn=None,
-        scale_mode='cycle')  ##exp_range ##triangular2
+        scale_mode='cycle')  # exp_range # triangular2
 
-    lrs = np.zeros((num_epoches), np.float32)
+    lrs = np.zeros(num_epoches, np.float32)
     for epoch in range(num_epoches):
 
         lr = LR.get_rate(epoch, num_epoches)

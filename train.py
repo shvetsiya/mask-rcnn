@@ -13,7 +13,6 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SequentialSampler, RandomSampler
 import torch.optim as optim
-import torchvision.transforms as transforms
 
 from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH
 
