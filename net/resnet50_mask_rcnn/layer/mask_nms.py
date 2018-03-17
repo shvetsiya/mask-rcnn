@@ -67,29 +67,28 @@ def mask_nms(cfg, mode, inputs, proposals, mask_logits):
 
                 intersection = (instances[first_index, y0:y1, x0:x1] &
                                 instances[second_index, y0:y1, x0:x1]).sum()
-                area = (instances[first_index, y0:y1, x0:x1] |
-                        instances[second_index, y0:y1, x0:x1]).sum()
-                instance_overlap[first_index, second_index] = intersection / (area + 1e-12)
-                instance_overlap[second_index, first_index] = instance_overlap[first_index,
-                                                                               second_index]
+                union = (instances[first_index, y0:y1, x0:x1] |
+                         instances[second_index, y0:y1, x0:x1]).sum()
+                intersection_over_union = intersection / (union + 1e-12)
+                instance_overlap[first_index, second_index] = intersection_over_union
+                instance_overlap[second_index, first_index] = intersection_over_union
 
         #non-max suppress
-        score = proposals[boxes_indices, 5]
-        boxes_indices = list(np.argsort(-score))
+        box_scores = proposals[boxes_indices, 5]
+        boxes_indices = list(np.argsort(-box_scores))
 
         ##  https://www.pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
         keep = []
         while len(boxes_indices) > 0:
-            i = boxes_indices[0]
+            i = boxes_indices[0]  # with current maximum score
             keep.append(i)
             delete_index = list(np.where(instance_overlap[i] > overlap_threshold)[0])
             boxes_indices = [e for e in boxes_indices if e not in delete_index]
-
-            #<todo> : merge?
 
         mask = np.zeros((image_h, image_w), np.float32)
         for i, k in enumerate(keep):
             mask[np.where(instances[k])] = i + 1
 
         masks.append(mask)
+
     return masks
