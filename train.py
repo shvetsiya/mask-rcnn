@@ -18,10 +18,9 @@ import torchvision.transforms as transforms
 from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH
 
 from utility.file import Logger, time_to_str
-from net.rate import get_learning_rate
+from net.rate import get_learning_rate, adjust_learning_rate
 from net.resnet50_mask_rcnn.configuration import Configuration
 from net.resnet50_mask_rcnn.model import MaskRcnnNet
-from net.rate import adjust_learning_rate
 from dataset.reader import ScienceDataset, multi_mask_to_annotation
 
 import dataset.transform as tr
