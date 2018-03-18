@@ -224,7 +224,8 @@ class Evaluator(object):
                 image = images[index_in_batch]
                 height, width = image.shape[:2]
 
-                boxes_coordinates = np.array([bb.coordinates for bb in bounding_boxes])
+                boxes_coordinates = np.array(
+                    [bb.coordinates for bb in bounding_boxes], dtype=np.float32)
 
                 truth_mask = instance_to_multi_mask(truth_instances[index_in_batch])
                 truth_box = truth_boxes[index_in_batch]

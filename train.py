@@ -14,6 +14,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SequentialSampler, RandomSampler
 import torch.optim as optim
 
+from tensorboardX import SummaryWriter
+
 from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH
 
 from utility.file import Logger, time_to_str
@@ -25,6 +27,9 @@ from dataset.reader import ScienceDataset, multi_mask_to_annotation
 import dataset.transform as tr
 
 WIDTH, HEIGHT = 256, 256
+
+OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
+tb_log = SummaryWriter(OUT_DIR + '/tb_logs/train/' + IDENTIFIER)
 
 
 def train_augment(image, multi_mask, meta, index):
@@ -72,9 +77,7 @@ def train_collate(batch):
 def evaluate(net, test_loader):
     test_num = 0
     test_loss = np.zeros(6, np.float32)
-    for i, (inputs, truth_boxes, truth_labels, truth_instances, metas, indices) in enumerate(
-            test_loader, 0):
-
+    for inputs, truth_boxes, truth_labels, truth_instances, metas, indices in test_loader:
         with torch.no_grad():
             inputs = Variable(inputs).cuda()
             net(inputs, truth_boxes, truth_labels, truth_instances)
@@ -93,6 +96,24 @@ def evaluate(net, test_loader):
     assert (test_num == len(test_loader.sampler))
 
     return test_loss / test_num
+
+
+def log_losses(train_loss, valid_loss, step):
+
+    def _log_loss(loss_title, loss_index):
+        tb_log.add_scalars(
+            loss_title, {
+                'train': train_loss[loss_index],
+                'valid': valid_loss[loss_index]
+            },
+            global_step=step)
+
+    _log_loss('total_loss', 0)
+    _log_loss('rpn_cls_loss', 1)
+    _log_loss('rpn_reg_loss', 2)
+    _log_loss('rcnn_cls_loss', 3)
+    _log_loss('rcnn_reg_loss', 4)
+    _log_loss('mask_cls_loss', 5)
 
 
 def run_train():
@@ -260,6 +281,7 @@ def run_train():
                          train_loss[0], train_loss[1], train_loss[2], train_loss[3], train_loss[4], train_loss[5],#train_acc,
                          batch_loss[0], batch_loss[1], batch_loss[2], batch_loss[3], batch_loss[4], batch_loss[5],#batch_acc,
                          time_to_str((timer() - start)/60)))
+                log_losses(train_loss=train_loss, valid_loss=valid_loss, step=i)
                 time.sleep(0.01)
 
             #if 1:
