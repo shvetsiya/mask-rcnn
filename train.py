@@ -42,10 +42,14 @@ def train_augment(image, multi_mask, meta, index):
         borderMode=cv2.BORDER_REFLECT_101,
         u=0.5)  #borderMode=cv2.BORDER_CONSTANT
 
-    image, multi_mask = tr.random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=1.0)
+    image, multi_mask = tr.random_crop_transform2(image, multi_mask, WIDTH, HEIGHT, u=0.5)
     image, multi_mask = tr.random_horizontal_flip_transform2(image, multi_mask, 0.5)
     image, multi_mask = tr.random_vertical_flip_transform2(image, multi_mask, 0.5)
     image, multi_mask = tr.random_rotate90_transform2(image, multi_mask, 0.5)
+    image = tr.random_hue_transform(image, u=0.5)
+    image = tr.random_saturation_transform(image, u=0.5)
+    image = tr.random_brightness_transform(image, u=0.5)
+    image = tr.random_brightness_shift_transform(image, u=0.5)
 
     input = torch.from_numpy(image.transpose((2, 0, 1))).float().div(255)
     box, label, instance = multi_mask_to_annotation(multi_mask)

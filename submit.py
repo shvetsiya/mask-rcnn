@@ -29,6 +29,7 @@ from dataset.reader import ScienceDataset, multi_mask_to_contour_overlay, \
         multi_mask_to_color_overlay
 from dataset.transform import pad_to_factor
 from postprocessing.utils import post_process
+from utility.tensorboard_results_publisher import publish_results
 
 OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
 
@@ -69,7 +70,7 @@ def _submit_collate(batch):
 
 
 def run_multi_masks_prediction():
-    initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model_no_crop.pth'
+    initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
 
     os.makedirs(OUT_DIR + '/submit/overlays', exist_ok=True)
     os.makedirs(OUT_DIR + '/submit/npys', exist_ok=True)
@@ -112,8 +113,6 @@ def run_multi_masks_prediction():
 
     log.write('** start evaluation here! **\n')
 
-    tb_log = SummaryWriter(OUT_DIR + '/tb_logs/submit/nn_' + IDENTIFIER)
-
     net.set_mode('test')
 
     for inputs, images, indices in tqdm(test_loader, 'Mask-RCNN predictions'):
@@ -150,15 +149,13 @@ def save_prediction_info(image_id: str, image: np.array, mask: np.array):
 
     name = image_id.split('/')[-1]
 
-    np.save(OUT_DIR + '/submit/npys/%s.npy' % (name), mask)
+    np.save(OUT_DIR + '/submit/npys/%s_nn.npy' % (name), mask)
     cv2.imwrite(OUT_DIR + '/submit/overlays/%s.png' % (name), stacked_results)
 
     os.makedirs(OUT_DIR + '/submit/psds/%s' % name, exist_ok=True)
     cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.png' % (name, name), image)
     cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.mask.png' % (name, name), color_overlay)
     cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.contour.png' % (name, name), contour_overlay)
-
-    tb_log.add_image(name, ToTensor()(stacked_results))
 
 
 def shrink_by_one(multi_mask):
@@ -175,8 +172,6 @@ def shrink_by_one(multi_mask):
 
 
 def run_post_processing():
-    tb_log = SummaryWriter(OUT_DIR + '/tb_logs/submit/pp_' + IDENTIFIER)
-
     image_dir = '../image/stage1_test/images'
     submit_dir = '../results/mask-rcnn-50-gray500-02/submit'
 
@@ -186,21 +181,14 @@ def run_post_processing():
     image_ids = []
     encoded_pixels = []
 
-    npy_files = glob.glob(npy_dir + '/*.npy')
+    npy_files = glob.glob(npy_dir + '/*_nn.npy')
     for npy_file in tqdm(npy_files, 'Postprocessing'):
-        name = npy_file.split('/')[-1].replace('.npy', '')
-
-        image_filepath = glob.glob(
-            '{}/image/**/images/{}.png'.format(DATA_DIR, name), recursive=True)[0]
-        image = cv2.imread(image_filepath, cv2.IMREAD_COLOR)
+        name = npy_file.split('/')[-1].replace('_nn.npy', '')
 
         nn_multi_mask = np.load(npy_file).astype(np.uint32)
         pp_multi_mask = post_process(nn_multi_mask)
 
-        results_image = combine_image_and_masks(name, image, nn_multi_mask, pp_multi_mask)
-        results_image_torch = ToTensor()(results_image)
-        results_image_torch = make_grid(results_image_torch, normalize=True, scale_each=True)
-        tb_log.add_image(name, results_image_torch)
+        np.save(OUT_DIR + '/submit/npys/%s_pp.npy' % (name), pp_multi_mask)
 
         for color in range(1, pp_multi_mask.max() + 1):
             rle = run_length_encode(pp_multi_mask == color)
@@ -216,33 +204,14 @@ def run_post_processing():
     df.to_csv(csv_file, index=False, columns=['ImageId', 'EncodedPixels'])
 
 
-def combine_image_and_masks(image_id, image, nn_mask, post_processed_mask):
-    pp_color_overlay = multi_mask_to_color_overlay(post_processed_mask, color='brg')
-    pp_color_overlay_with_contours = multi_mask_to_contour_overlay(
-        post_processed_mask, pp_color_overlay, color=[255, 255, 255])
-
-    nn_color_overlay = multi_mask_to_color_overlay(post_processed_mask, color='brg')
-    nn_color_overlay_with_contours = multi_mask_to_contour_overlay(
-        nn_mask, nn_color_overlay, color=[255, 255, 255])
-
-    pp_contour_overlay = multi_mask_to_contour_overlay(
-        post_processed_mask, image, color=[0, 255, 0])
-
-    original_and_nn = cv2.addWeighted(nn_color_overlay_with_contours, 0.3, image, 0.8,
-                                      0.)  # image * α + mask * β + λ
-    original_and_pp = cv2.addWeighted(pp_color_overlay_with_contours, 0.3, image, 0.8,
-                                      0.)  # image * α + mask * β + λ
-
-    stacked_results = np.vstack((np.hstack((image, pp_contour_overlay)),
-                                 np.hstack((original_and_nn, original_and_pp))))
-
-    return stacked_results
-
-
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_multi_masks_prediction()
+    best_submit_npys_dir = '../results/mask-rcnn-50-gray500-02/submit_432/npys'
+    submit_dir = '../results/mask-rcnn-50-gray500-02/submit'
+
+    # run_multi_masks_prediction()
     run_post_processing()
+    publish_results(submit_dir + '/npys', [best_submit_npys_dir])
 
     print('Sucess!')

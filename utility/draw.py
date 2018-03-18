@@ -5,11 +5,11 @@ import matplotlib.cm
 
 
 # draw -----------------------------------
-def image_show(name, image, resize=1):
+def image_show(image_id, image, resize=1):
     H, W = image.shape[0:2]
-    cv2.namedWindow(name, cv2.WINDOW_NORMAL)
-    cv2.imshow(name, image.astype(np.uint8))
-    cv2.resizeWindow(name, round(resize * W), round(resize * H))
+    cv2.namedWindow(image_id, cv2.WINDOW_NORMAL)
+    cv2.imshow(image_id, image.astype(np.uint8))
+    cv2.resizeWindow(image_id, round(resize * W), round(resize * H))
 
 
 def draw_shadow_text(img, text, pt, fontScale, color, thickness, color1=None, thickness1=None):
@@ -67,30 +67,6 @@ def draw_screen_rect(image, pt1, pt2, color, alpha=0.5):
     x2, y2 = pt2
     image[y1:y2, x1:
           x2, :] = (1 - alpha) * image[y1:y2, x1:x2, :] + (alpha) * np.array(color, np.uint8)
-
-
-# def draw_mask(image, mask, color=(255,255,255), α=1,  β=0.25, λ=0., threshold=32 ):
-#     # image * α + mask * β + λ
-#
-#     if threshold is None:
-#         mask = mask/255
-#     else:
-#         mask = clean_mask(mask,threshold,1)
-#
-#     mask  = np.dstack((color[0]*mask,color[1]*mask,color[2]*mask)).astype(np.uint8)
-#     image[...] = cv2.addWeighted(image, α, mask, β, λ)
-#
-
-# def draw_contour(image, mask, color=(0,255,0), thickness=1, threshold=127):
-#     ret, thresh = cv2.threshold(mask,threshold,255,0)
-#     ret = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-#     hierarchy = ret[0]
-#     contours  = ret[1]
-#     #image[...]=image
-#     cv2.drawContours(image, contours, -1, color, thickness, cv2.LINE_AA)
-#     ## drawContours(image, contours, contourIdx, color, thickness=None, lineType=None, hierarchy=None, maxLevel=None, offset=None): # real signature unknown; restored from __doc__
-#
-#
 
 
 def to_color(s, color=None):
