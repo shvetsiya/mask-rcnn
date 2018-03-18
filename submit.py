@@ -15,10 +15,11 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SequentialSampler
 from torchvision.transforms import ToTensor
+from torchvision.utils import make_grid
 
 from tensorboardX import SummaryWriter
 
-from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH, ALL_TEST_IMAGE_ID
+from common import RESULTS_DIR, IDENTIFIER, SEED, PROJECT_PATH, ALL_TEST_IMAGE_ID, DATA_DIR
 
 from utility.file import Logger
 from net.resnet50_mask_rcnn.configuration import Configuration
@@ -27,10 +28,9 @@ from net.metric import run_length_encode
 from dataset.reader import ScienceDataset, multi_mask_to_contour_overlay, \
         multi_mask_to_color_overlay
 from dataset.transform import pad_to_factor
+from postprocessing.utils import post_process
 
 OUT_DIR = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
-
-tb_log = SummaryWriter(OUT_DIR + '/tb_logs/submit/' + IDENTIFIER)
 
 
 def _revert(results, images):
@@ -68,8 +68,8 @@ def _submit_collate(batch):
     return [inputs, images, indices]
 
 
-def run_submit():
-    initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
+def run_multi_masks_prediction():
+    initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model_no_crop.pth'
 
     os.makedirs(OUT_DIR + '/submit/overlays', exist_ok=True)
     os.makedirs(OUT_DIR + '/submit/npys', exist_ok=True)
@@ -112,9 +112,11 @@ def run_submit():
 
     log.write('** start evaluation here! **\n')
 
+    tb_log = SummaryWriter(OUT_DIR + '/tb_logs/submit/nn_' + IDENTIFIER)
+
     net.set_mode('test')
 
-    for inputs, images, indices in tqdm(test_loader):
+    for inputs, images, indices in tqdm(test_loader, 'Mask-RCNN predictions'):
         batch_size = inputs.size()[0]
         # NOTE: Current version support batch_size==1 for variable size input. To use
         # batch_size > 1, need to fix code for net.windows, etc.
@@ -140,10 +142,11 @@ def run_submit():
 
 def save_prediction_info(image_id: str, image: np.array, mask: np.array):
     contour_overlay = multi_mask_to_contour_overlay(mask, image, color=[0, 255, 0])
-    color_overlay = multi_mask_to_color_overlay(mask, color='summer')
-    color1_overlay = multi_mask_to_contour_overlay(mask, color_overlay, color=[255, 255, 255])
+    color_overlay = multi_mask_to_color_overlay(mask, color='brg')
+    color_overlay_with_contours = multi_mask_to_contour_overlay(
+        mask, color_overlay, color=[255, 255, 255])
 
-    stacked_results = np.hstack((image, contour_overlay, color1_overlay))
+    stacked_results = np.hstack((image, contour_overlay, color_overlay_with_contours))
 
     name = image_id.split('/')[-1]
 
@@ -156,23 +159,6 @@ def save_prediction_info(image_id: str, image: np.array, mask: np.array):
     cv2.imwrite(OUT_DIR + '/submit/psds/%s/%s.contour.png' % (name, name), contour_overlay)
 
     tb_log.add_image(name, ToTensor()(stacked_results))
-
-
-def filter_small(multi_mask, threshold):
-    num_masks = int(multi_mask.max())
-
-    j = 0
-    for i in range(num_masks):
-        thresh = (multi_mask == (i + 1))
-
-        area = thresh.sum()
-        if area < threshold:
-            multi_mask[thresh] = 0
-        else:
-            multi_mask[thresh] = (j + 1)
-            j = j + 1
-
-    return multi_mask
 
 
 def shrink_by_one(multi_mask):
@@ -188,7 +174,9 @@ def shrink_by_one(multi_mask):
     return multi_mask1
 
 
-def run_npy_to_sumbit_csv():
+def run_post_processing():
+    tb_log = SummaryWriter(OUT_DIR + '/tb_logs/submit/pp_' + IDENTIFIER)
+
     image_dir = '../image/stage1_test/images'
     submit_dir = '../results/mask-rcnn-50-gray500-02/submit'
 
@@ -199,34 +187,62 @@ def run_npy_to_sumbit_csv():
     encoded_pixels = []
 
     npy_files = glob.glob(npy_dir + '/*.npy')
-    for npy_file in npy_files:
+    for npy_file in tqdm(npy_files, 'Postprocessing'):
         name = npy_file.split('/')[-1].replace('.npy', '')
 
-        multi_mask = np.load(npy_file)
+        image_filepath = glob.glob(
+            '{}/image/**/images/{}.png'.format(DATA_DIR, name), recursive=True)[0]
+        image = cv2.imread(image_filepath, cv2.IMREAD_COLOR)
 
-        #<todo> ---------------------------------
-        #post process here
-        multi_mask = filter_small(multi_mask, 8)
-        #<todo> ---------------------------------
+        nn_multi_mask = np.load(npy_file).astype(np.uint32)
+        pp_multi_mask = post_process(nn_multi_mask)
 
-        for color in range(1, multi_mask.max() + 1):
-            rle = run_length_encode(multi_mask == color)
+        results_image = combine_image_and_masks(name, image, nn_multi_mask, pp_multi_mask)
+        results_image_torch = ToTensor()(results_image)
+        results_image_torch = make_grid(results_image_torch, normalize=True, scale_each=True)
+        tb_log.add_image(name, results_image_torch)
+
+        for color in range(1, pp_multi_mask.max() + 1):
+            rle = run_length_encode(pp_multi_mask == color)
             image_ids.append(name)
             encoded_pixels.append(rle)
 
     # NOTE: Kaggle submission requires all test image to be listed.
     for t in ALL_TEST_IMAGE_ID:
         image_ids.append(t)
-        encoded_pixels.append('')  #null
+        encoded_pixels.append('')
 
     df = pd.DataFrame({'ImageId': image_ids, 'EncodedPixels': encoded_pixels})
     df.to_csv(csv_file, index=False, columns=['ImageId', 'EncodedPixels'])
 
 
+def combine_image_and_masks(image_id, image, nn_mask, post_processed_mask):
+    pp_color_overlay = multi_mask_to_color_overlay(post_processed_mask, color='brg')
+    pp_color_overlay_with_contours = multi_mask_to_contour_overlay(
+        post_processed_mask, pp_color_overlay, color=[255, 255, 255])
+
+    nn_color_overlay = multi_mask_to_color_overlay(post_processed_mask, color='brg')
+    nn_color_overlay_with_contours = multi_mask_to_contour_overlay(
+        nn_mask, nn_color_overlay, color=[255, 255, 255])
+
+    pp_contour_overlay = multi_mask_to_contour_overlay(
+        post_processed_mask, image, color=[0, 255, 0])
+
+    original_and_nn = cv2.addWeighted(nn_color_overlay_with_contours, 0.3, image, 0.8,
+                                      0.)  # image * α + mask * β + λ
+    original_and_pp = cv2.addWeighted(pp_color_overlay_with_contours, 0.3, image, 0.8,
+                                      0.)  # image * α + mask * β + λ
+
+    stacked_results = np.vstack((np.hstack((image, pp_contour_overlay)),
+                                 np.hstack((original_and_nn, original_and_pp))))
+
+    return stacked_results
+
+
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    run_submit()
-    run_npy_to_sumbit_csv()
+    run_multi_masks_prediction()
+    run_post_processing()
 
     print('Sucess!')
