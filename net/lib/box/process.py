@@ -1,14 +1,18 @@
+#from common import *
+"""
+import os
+import numpy as np
+import torch
+
+from net.lib.box.nms.torch_nms import torch_nms
+from net.lib.box.nms.gpu_nms import gpu_nms
+from net.lib.box.nms.cython_nms import cython_nms
+"""
 from common import *
 from net.lib.box.overlap.cython_box_overlap import cython_box_overlap
 from net.lib.box.nms.torch_nms import torch_nms
 from net.lib.box.nms.gpu_nms import gpu_nms
 from net.lib.box.nms.cython_nms import cython_nms
-
-#from model.lib.box.nms.py_nms import py_nms
-#
-
-## torch #####################################################################
-
 
 # Clip process to image boundaries.
 def torch_clip_boxes(boxes, width, height):

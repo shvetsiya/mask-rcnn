@@ -1,15 +1,15 @@
-from common import *
-from utility.draw import *
-import itertools
+import os
+import numpy as np
+import cv2
+import torch
+from torch.autograd import  Variable
 
-if __name__ == '__main__':
-    from rpn_multi_nms import *
-
-else:
-    from .rpn_multi_nms import *
+from utility.draw import image_show
+from net.lib.box.overlap.cython_box_overlap import cython_box_overlap
+from net.resnet50_mask_rcnn.layer.rpn_multi_nms import rpn_decode, rpn_encode
 
 
-## debug and draw #############################################################
+# # debug and draw #############################################################
 def normalize(data):
     data = (data - data.min()) / (data.max() - data.min())
     return data
@@ -198,7 +198,7 @@ def make_one_rpn_target(cfg, mode, input, window, truth_box, truth_label):
         # classification ---------------------------------------
 
         # bg
-        overlap = cython_box_overlap(window, truth_box)
+        overlap =  cython_box_overlap(window, truth_box)
         argmax_overlap = np.argmax(overlap, 1)
         max_overlap = overlap[np.arange(num_window), argmax_overlap]
 
@@ -395,6 +395,6 @@ def make_rpn_target(cfg, mode, inputs, window, truth_boxes, truth_labels):
 if __name__ == '__main__':
     print('%s: calling main function ... ' % os.path.basename(__file__))
 
-    check_layer()
+    #check_layer()
 
     print('sucess')

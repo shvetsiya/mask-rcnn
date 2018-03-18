@@ -1,5 +1,5 @@
-from common import *
-
+import numpy as np
+import cv2
 
 def prob_delta_to_candidates(prob, delta, heads, threshold=0.4):
     num_heads = len(heads)
@@ -51,12 +51,12 @@ def non_max_suppress(candidates, min_distance_threshold=0.25):
         select.append(i)
 
         # last added
-        distances = ((cx[indices] - cx[i])**2 \
-                +    (cy[indices] - cy[i])**2 \
-                +    (log2r[indices] - log2r[i])**2)**0.5
+        distances = ((cx[indices] - cx[i])**2 +
+                     (cy[indices] - cy[i])**2 +
+                     (log2r[indices] - log2r[i])**2)**0.5
 
         # delete all  candidates that is nearby
-        #remove = np.where(distances < min_distance_threshold*log2r[i])
+        # remove = np.where(distances < min_distance_threshold*log2r[i])
         remove = np.where(distances < 6)  #<todo> a good thresholding mnethods
         indices = np.delete(indices, remove)
 

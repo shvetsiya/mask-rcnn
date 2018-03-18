@@ -1,4 +1,6 @@
-from common import *
+import os
+import shutil
+import sys
 import builtins
 
 
@@ -16,46 +18,51 @@ def remove_comments(lines, token='#'):
 
 
 def open(file, mode=None, encoding=None):
-    if mode == None: mode = 'r'
+    if mode is None:
+        mode = 'r'
 
     if '/' in file:
         if 'w' or 'a' in mode:
-            dir = os.path.dirname(file)
-            if not os.path.isdir(dir): os.makedirs(dir)
+            path_dir = os.path.dirname(file)
+            if not os.path.isdir(path_dir):
+                os.makedirs(path_dir)
 
     f = builtins.open(file, mode=mode, encoding=encoding)
     return f
 
 
 def remove(file):
-    if os.path.exists(file): os.remove(file)
+    if os.path.exists(file):
+        os.remove(file)
 
 
-def empty(dir):
-    if os.path.isdir(dir):
-        shutil.rmtree(dir, ignore_errors=True)
+def empty(path_dir):
+    if os.path.isdir(path_dir):
+        shutil.rmtree(path_dir, ignore_errors=True)
     else:
-        os.makedirs(dir)
+        os.makedirs(path_dir)
 
 
 # http://stackoverflow.com/questions/34950201/pycharm-print-end-r-statement-not-working
 class Logger(object):
 
     def __init__(self):
-        self.terminal = sys.stdout  #stdout
+        self.terminal = sys.stdout  # stdout
         self.file = None
 
     def open(self, file, mode=None):
-        if mode is None: mode = 'w'
+        if mode is None:
+            mode = 'w'
         self.file = open(file, mode)
 
     def write(self, message, is_terminal=1, is_file=1):
-        if '\r' in message: is_file = 0
+        if '\r' in message:
+            is_file = 0
 
         if is_terminal == 1:
             self.terminal.write(message)
             self.terminal.flush()
-            #time.sleep(1)
+            # time.sleep(1)
 
         if is_file == 1:
             self.file.write(message)
@@ -95,5 +102,5 @@ def read_list_from_file(list_file, comment='#', func=None):
 def time_to_str(t):
     t = int(t)
     hr = t // 60
-    min = t % 60
-    return '%2d hr %02d min' % (hr, min)
+    minutes = t % 60
+    return '%2d hr %02d min' % (hr, minutes)

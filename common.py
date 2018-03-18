@@ -19,14 +19,10 @@ import cv2
 
 import matplotlib
 matplotlib.use('TkAgg')
-#matplotlib.use('Qt4Agg')
-#matplotlib.use('Qt5Agg')
+
 
 # torch libs
-import torch
-import torchvision.transforms as transforms
-from torch.utils.data.dataset import Dataset
-from torch.utils.data import DataLoader
+
 from torch.utils.data.sampler import *
 
 import torch.nn as nn
@@ -52,10 +48,6 @@ from distutils.dir_util import copy_tree
 import time
 import matplotlib.pyplot as plt
 
-import skimage
-import skimage.color
-import skimage.morphology
-from scipy import ndimage
 
 
 #---------------------------------------------------------------------------------
