@@ -123,7 +123,6 @@ def log_losses(train_loss, valid_loss, step):
 def run_train():
     out_dir = RESULTS_DIR + '/mask-rcnn-50-gray500-02'
     initial_checkpoint = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
-    ##
 
     pretrain_file = RESULTS_DIR + '/mask-rcnn-50-gray500-02/checkpoint/best_model.pth'
     #None #RESULTS_DIR + '/mask-single-shot-dummy-1a/checkpoint/00028000_model.pth'
@@ -239,7 +238,7 @@ def run_train():
 
     log.write(' images_per_epoch = %d\n\n' % len(train_dataset))
     log.write(
-        ' rate    iter   epoch  num   | valid_loss               | train_loss               | batch_loss               |  time          \n'
+        ' rate    current_iter   epoch  num   | valid_loss               | train_loss               | batch_loss               |  time          \n'
     )
     log.write(
         '-------------------------------------------------------------------------------------------------------------------------------\n'
@@ -254,11 +253,11 @@ def run_train():
 
     start = timer()
     j = 0
-    i = 0
+    current_iter = 0
 
     last_saved_model_filepath = None
 
-    while i < num_iters:  # loop over the dataset multiple times
+    while current_iter < num_iters:  # loop over the dataset multiple times
         sum_train_loss = np.zeros(6, np.float32)
         sum_train_acc = 0.0
         sum = 0
@@ -269,46 +268,47 @@ def run_train():
             if all(len(b) == 0 for b in truth_boxes): continue
 
             batch_size = len(indices)
-            i = j / iter_accum + start_iter
-            epoch = (i - start_iter) * batch_size * iter_accum / len(train_dataset) + start_epoch
+            current_iter = j / iter_accum + start_iter
+            epoch = (current_iter - start_iter
+                    ) * batch_size * iter_accum / len(train_dataset) + start_epoch
             num_products = epoch * len(train_dataset)
 
-            if i % iter_valid == 0:
+            if current_iter % iter_valid == 0:
                 net.set_mode('valid')
                 valid_loss = evaluate(net, valid_loader)
                 net.set_mode('train')
 
                 print('\r', end='', flush=True)
                 log.write('%0.4f %5.1f k %6.1f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %s\n' % (\
-                         rate, i/1000, epoch, num_products/1000000,
+                         rate, current_iter/1000, epoch, num_products/1000000,
                          valid_loss[0], valid_loss[1], valid_loss[2], valid_loss[3], valid_loss[4], valid_loss[5],#valid_acc,
                          train_loss[0], train_loss[1], train_loss[2], train_loss[3], train_loss[4], train_loss[5],#train_acc,
                          batch_loss[0], batch_loss[1], batch_loss[2], batch_loss[3], batch_loss[4], batch_loss[5],#batch_acc,
                          time_to_str((timer() - start)/60)))
-                log_losses(train_loss=train_loss, valid_loss=valid_loss, step=i)
+                log_losses(train_loss=train_loss, valid_loss=valid_loss, step=current_iter)
                 time.sleep(0.01)
 
-            #if 1:
-            if i in iter_save:
-                torch.save(net.state_dict(), out_dir + '/checkpoint/%08d_model.pth' % (i))
+            if current_iter in iter_save:
+                torch.save(net.state_dict(),
+                           out_dir + '/checkpoint/%08d_model.pth' % (current_iter))
                 """
                 torch.save({
                     'optimizer': optimizer.state_dict(),
-                    'iter': i,
+                    'current_iter': current_iter,
                     'epoch': epoch,
-                }, out_dir + '/checkpoint/%08d_optimizer.pth' % (i))
+                }, out_dir + '/checkpoint/%08d_optimizer.pth' % (current_iter))
                 """
                 with open(out_dir + '/checkpoint/configuration.pkl', 'wb') as pickle_file:
                     pickle.dump(cfg, pickle_file, pickle.HIGHEST_PROTOCOL)
 
             # learning rate schduler -------------
             if LR is not None:
-                lr = LR.get_rate(i)
+                lr = LR.get_rate(current_iter)
                 if lr < 0: break
                 adjust_learning_rate(optimizer, lr / iter_accum)
             rate = get_learning_rate(optimizer) * iter_accum
 
-            # one iteration update  -------------
+            # one current_iter update  -------------
             inputs = Variable(inputs).cuda()
             net(inputs, truth_boxes, truth_labels, truth_instances)
             loss = net.loss(inputs, truth_boxes, truth_labels, truth_instances)
@@ -333,7 +333,7 @@ def run_train():
             sum_train_loss += batch_loss
             sum_train_acc += batch_acc
             sum += 1
-            if i % iter_smooth == 0:
+            if current_iter % iter_smooth == 0:
                 train_loss = sum_train_loss / sum
                 train_acc = sum_train_acc / sum
                 sum_train_loss = np.zeros(6, np.float32)
@@ -341,23 +341,23 @@ def run_train():
                 sum = 0
 
             print('\r%0.4f %5.1f k %6.1f %4.1f m | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %0.3f   %0.2f %0.2f   %0.2f %0.2f   %0.2f | %s  %d,%d,%s' % (\
-                         rate, i/1000, epoch, num_products/1000000,
+                         rate, current_iter/1000, epoch, num_products/1000000,
                          valid_loss[0], valid_loss[1], valid_loss[2], valid_loss[3], valid_loss[4], valid_loss[5],#valid_acc,
                          train_loss[0], train_loss[1], train_loss[2], train_loss[3], train_loss[4], train_loss[5],#train_acc,
                          batch_loss[0], batch_loss[1], batch_loss[2], batch_loss[3], batch_loss[4], batch_loss[5],#batch_acc,
-                         time_to_str((timer() - start)/60) ,i,j, ''), end='',flush=True)#str(inputs.size()))
+                         time_to_str((timer() - start)/60) ,current_iter,j, ''), end='',flush=True)#str(inputs.size()))
             j = j + 1
         pass  #-- end of one data loader --
     pass  #-- end of all iterations --
 
     if 1:  #save last
-        torch.save(net.state_dict(), out_dir + '/checkpoint/%d_model.pth' % (i))
+        torch.save(net.state_dict(), out_dir + '/checkpoint/%d_model.pth' % (current_iter))
         """
         torch.save({
             'optimizer': optimizer.state_dict(),
-            'iter': i,
+            'current_iter': current_iter,
             'epoch': epoch,
-        }, out_dir + '/checkpoint/%d_optimizer.pth' % (i))
+        }, out_dir + '/checkpoint/%d_optimizer.pth' % (current_iter))
         """
     log.write('\n')
 
