@@ -69,7 +69,6 @@ class BottleneckBlock(nn.Module):
                 in_planes, out_planes, kernel_size=1, padding=0, stride=stride, bias=False)
 
     def forward(self, x):
-
         x = F.relu(self.bn1(x), inplace=True)
         z = self.conv1(x)
         z = F.relu(self.bn2(z), inplace=True)
@@ -104,6 +103,8 @@ def make_layer_c(in_planes, planes, out_planes, num_blocks, stride):
 
 
 class FeatureNet(nn.Module):
+    """ Feature Pyramid Network (FPN).
+    """
 
     def __init__(self, cfg: Configuration, in_channels, out_channels=256):
         super(FeatureNet, self).__init__()
@@ -123,7 +124,9 @@ class FeatureNet(nn.Module):
         self.layer_p2 = LateralBlock(512, out_channels, out_channels)
         self.layer_p1 = LateralBlock(256, out_channels, out_channels)
 
-    def forward(self, x):
+    def forward(self, x) -> List[Variable]:
+        """Ruturns a list of result pyramid variables.
+        """
         #pass                        #; print('input ',   x.size())
         c0 = self.layer_c0(x)  #; print('layer_c0 ',c0.size())
         #
@@ -158,8 +161,8 @@ class RpnMultiHead(nn.Module):
         self.convs = nn.ModuleList()
         self.logits = nn.ModuleList()
         self.deltas = nn.ModuleList()
+        channels = in_channels * 2
         for l in range(self.num_scales):
-            channels = in_channels * 2
             self.convs.append(nn.Conv2d(in_channels, channels, kernel_size=3, padding=1))
             self.logits.append(
                 nn.Sequential(
@@ -173,14 +176,14 @@ class RpnMultiHead(nn.Module):
                         kernel_size=3,
                         padding=1),))
 
-    def forward(self, fs):
-        batch_size = len(fs[0])
+    def forward(self, features_pyramid):
+        batch_size = len(features_pyramid[0])
 
         logits_flat = []
         probs_flat = []
         deltas_flat = []
         for l in range(self.num_scales):  # apply multibox head to feature maps
-            f = fs[l]
+            f = features_pyramid[l]
             f = F.relu(self.convs[l](f))
 
             f = F.dropout(f, p=0.5, training=self.training)
@@ -200,9 +203,6 @@ class RpnMultiHead(nn.Module):
         return logits_flat, deltas_flat
 
 
-# https://qiita.com/yu4u/items/5cbe9db166a5d72f9eb8
-
-
 class CropRoi(nn.Module):
 
     def __init__(self, cfg, crop_size):
@@ -216,15 +216,17 @@ class CropRoi(nn.Module):
         for l in range(self.num_scales):
             self.crops.append(Crop(self.crop_size, self.crop_size, 1 / self.scales[l]))
 
-    def forward(self, fs, proposals):
+    def forward(self, features_pyramid, proposals):
         num_proposals = len(proposals)
 
-        ## this is  complicated. we need to decide for a given roi, which of the p0,p1, ..p3 layers to pool from
+        # We need to decide for a given roi, which of the p1, p2, p3, p4 layers to pool from (this
+        # is complicated).
         boxes = proposals.detach().data[:, 1:5]
         sizes = boxes[:, 2:] - boxes[:, :2]
         sizes = torch.sqrt(sizes[:, 0] * sizes[:, 1])
-        distances = torch.abs(sizes.view(num_proposals,1).expand(num_proposals,4) \
-                              - torch.from_numpy(np.array(self.sizes,np.float32)).cuda())
+        distances = torch.abs(
+            sizes.view(num_proposals, 1).expand(num_proposals, 4) -
+            torch.from_numpy(np.array(self.sizes, np.float32)).cuda())
         min_distances, min_index = distances.min(1)
 
         rois = proposals.detach().data[:, 0:5]
@@ -236,7 +238,7 @@ class CropRoi(nn.Module):
             index = (min_index == l).nonzero()
 
             if len(index) > 0:
-                crop = self.crops[l](fs[l], rois[index].view(-1, 5))
+                crop = self.crops[l](features_pyramid[l], rois[index].view(-1, 5))
                 crops.append(crop)
                 indices.append(index)
 
@@ -290,11 +292,11 @@ class RcnnHead(nn.Module):
 #             )
 #
 #
-#     def forward(self, fs, proposals):
+#     def forward(self, features_pyramid, proposals):
 #         rois = proposals[:,0:5]
 #         crops=[]
 #         for l in range(self.num_scales):
-#             c = self.convs[l](fs[l])
+#             c = self.convs[l](features_pyramid[l])
 #             c = self.crops[l](c,rois)
 #             crops.append(c)
 #         crops = torch.cat(crops,1)
@@ -371,14 +373,24 @@ class MaskRcnnNet(nn.Module):
         mode = self.mode
         batch_size = len(inputs)
 
+        print('Input size: {}'.format(inputs.size()))
+
         # Features
         features = data_parallel(self.feature_net, inputs)
 
+        print('Features size: {}'.format(len(features)))
+
         # RPN proposals
         self._rpn_logits_flat, self._rpn_deltas_flat = data_parallel(self.rpn_head, features)
+
+        print('RPN logits flat size: {}'.format(self._rpn_logits_flat.size()))
+        print('RPN deltas flat size: {}'.format(self._rpn_deltas_flat.size()))
+
         rpn_window = make_rpn_windows(cfg, features)
         rpn_proposals = rpn_nms(cfg, mode, inputs, rpn_window, self._rpn_logits_flat,
                                 self._rpn_deltas_flat)
+
+        print('RPN proposals size: {}'.format(rpn_proposals.size()))
 
         if mode in ['train', 'valid']:
             self._rpn_labels, _, self._rpn_label_weights, self._rpn_targets, self._rpn_target_weights = make_rpn_target(
@@ -386,6 +398,8 @@ class MaskRcnnNet(nn.Module):
 
             rpn_proposals, self._rcnn_labels, _, self._rcnn_targets  = \
                 make_rcnn_target(cfg, mode, inputs, rpn_proposals, truth_boxes, truth_labels )
+
+        print('RPN proposals size after `if mode`: {}'.format(rpn_proposals.size()))
 
         # RCNN proposals
         rcnn_proposals = rpn_proposals
@@ -412,8 +426,8 @@ class MaskRcnnNet(nn.Module):
         self.results = self._construct_results(cfg, inputs, self._detections, self._mask_logits)
 
     def _construct_results(self, cfg: Configuration, inputs: Variable, _detections: np.array,
-                           _mask_logits: np.array) -> List[Result]:
-        masks, bounding_boxes = masks_nms_for_batch(cfg, inputs, _detections, _mask_logits)
+                           mask_logits: np.array) -> List[Result]:
+        masks, bounding_boxes = masks_nms_for_batch(cfg, inputs, _detections, mask_logits)
         results = []
         for index_in_batch in range(len(inputs)):
             results.append(self.Result(masks[index_in_batch], bounding_boxes[index_in_batch]))
@@ -493,15 +507,15 @@ def run_check_multi_rpn_head():
     feature_heights = [int(H // 2**l) for l in range(num_scales)]
     feature_widths = [int(W // 2**l) for l in range(num_scales)]
 
-    fs = []
+    features_pyramid = []
     for h, w in zip(feature_heights, feature_widths):
         f = np.random.uniform(-1, 1, size=(batch_size, in_channels, h, w)).astype(np.float32)
         f = Variable(torch.from_numpy(f)).cuda()
-        fs.append(f)
+        features_pyramid.append(f)
 
     cfg = Configuration()
     rpn_head = RpnMultiHead(cfg, in_channels).cuda()
-    logits_flat, deltas_flat = rpn_head(fs)
+    logits_flat, deltas_flat = rpn_head(features_pyramid)
 
     print('logits_flat ', logits_flat.size())
     print('deltas_flat ', deltas_flat.size())
@@ -519,11 +533,11 @@ def run_check_crop_head():
     feature_heights = [int(H // 2**l) for l in range(num_scales)]
     feature_widths = [int(W // 2**l) for l in range(num_scales)]
 
-    fs = []
+    features_pyramid = []
     for h, w in zip(feature_heights, feature_widths):
         f = np.random.uniform(-1, 1, size=(batch_size, in_channels, h, w)).astype(np.float32)
         f = Variable(torch.from_numpy(f)).cuda()
-        fs.append(f)
+        features_pyramid.append(f)
 
     #proposal i,x0,y0,x1,y1,score, label
     proposals = []
@@ -551,7 +565,7 @@ def run_check_crop_head():
     #--------------------------------------
     cfg = Configuration()
     crop_net = CropRoi(cfg).cuda()
-    crops = crop_net(fs, proposals)
+    crops = crop_net(features_pyramid, proposals)
 
     print('crops', crops.size())
     print('')

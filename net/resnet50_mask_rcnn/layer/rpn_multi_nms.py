@@ -1,16 +1,17 @@
-#import os
-#import numpy as np
-#import torch
-#from torch.autograd import Variable
-#import itertools
-
-#from common import  np_softmax
-#from net.lib.box.process import clip_boxes, filter_boxes
-#from net.lib.box.nms.gpu_nms import gpu_nms
-from common import *
+import os
+import numpy as np
+import torch
+from torch.autograd import Variable
 import itertools
 
-from net.lib.box.process import *
+from common import  np_softmax
+from net.lib.box.process import clip_boxes, filter_boxes
+from net.lib.box.nms.gpu_nms import gpu_nms
+from net.resnet50_mask_rcnn.configuration import Configuration
+# from common import *
+# import itertools
+
+# from net.lib.box.process import *
 
 #------------------------------------------------------------------------------
 # make windows
@@ -51,13 +52,12 @@ def make_windows(f, scale, bases):
     return windows
 
 
-def make_rpn_windows(cfg, fs):
-
+def make_rpn_windows(cfg: Configuration, features_pyramid):
     rpn_windows = []
     num_scales = len(cfg.rpn_scales)
     for l in range(num_scales):
         bases = make_bases(cfg.rpn_base_sizes[l], cfg.rpn_base_apsect_ratios[l])
-        windows = make_windows(fs[l], cfg.rpn_scales[l], bases)
+        windows = make_windows(features_pyramid[l], cfg.rpn_scales[l], bases)
         rpn_windows.append(windows)
 
     rpn_windows = np.vstack(rpn_windows)
